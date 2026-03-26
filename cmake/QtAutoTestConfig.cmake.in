@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Qt@QT_VERSION_MAJOR@ REQUIRED COMPONENTS Core Widgets Test WebSockets)
+
+include("${CMAKE_CURRENT_LIST_DIR}/QtAutoTestTargets.cmake")
+
+check_required_components(QtAutoTest)
