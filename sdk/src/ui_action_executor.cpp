@@ -1,7 +1,8 @@
 #include "ui_action_executor.h"
 
-#include "demo_visualizer.h"
 #include "widget_introspection.h"
+
+#include <qtautotest/action_observer.h>
 
 #include <QAbstractButton>
 #include <QAbstractItemView>
@@ -174,6 +175,12 @@ QTreeWidgetItem* findTreeItem(QTreeWidget* tree, const QJsonArray& path)
     return current;
 }
 
+qtautotest::ActionObserver* currentActionObserver()
+{
+    qtautotest::ActionObserver* observer = qtautotest::actionObserver();
+    return observer != nullptr && observer->isEnabled() ? observer : nullptr;
+}
+
 } // namespace
 
 namespace UiActionExecutor {
@@ -199,15 +206,17 @@ QJsonObject click(const QJsonObject& selector)
     QPointer<QWidget> safeWidget(widget);
 
     const QPoint clickPoint = widget->rect().center();
-    DemoVisualizer::prepareForClick(widget, clickPoint);
+    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+        observer->prepareForClick(widget, clickPoint);
+    }
 
-    if (DemoVisualizer::isEnabled()) {
+    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
         QTest::mouseMove(widget, clickPoint);
         QTest::mousePress(widget, Qt::LeftButton, Qt::NoModifier, clickPoint);
-        DemoVisualizer::showClickPulse(widget, clickPoint);
-        QTest::qWait(DemoVisualizer::mousePressHoldMs());
+        observer->showClickPulse(widget, clickPoint);
+        QTest::qWait(observer->mousePressHoldMs());
         QTest::mouseRelease(widget, Qt::LeftButton, Qt::NoModifier, clickPoint);
-        DemoVisualizer::finishAction();
+        observer->finishAction();
     } else {
         QTest::mouseMove(widget, clickPoint);
         QTest::mouseClick(widget, Qt::LeftButton, Qt::NoModifier, clickPoint);
@@ -249,38 +258,44 @@ QJsonObject setText(const QJsonObject& selector, const QString& text)
         if (lineEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Line edit is read-only."));
         }
-        DemoVisualizer::prepareForTyping(widget);
+        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+            observer->prepareForTyping(widget);
+        }
         lineEdit->setFocus();
         lineEdit->selectAll();
         QTest::keyClick(lineEdit, Qt::Key_Backspace);
         QTest::keyClicks(lineEdit, text, Qt::NoModifier,
-                         DemoVisualizer::isEnabled() ? DemoVisualizer::keyDelayMs() : 0);
+                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
     } else if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(widget)) {
         if (plainTextEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Plain text edit is read-only."));
         }
-        DemoVisualizer::prepareForTyping(widget);
+        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+            observer->prepareForTyping(widget);
+        }
         plainTextEdit->setFocus();
         plainTextEdit->selectAll();
         QTest::keyClick(plainTextEdit, Qt::Key_Backspace);
         QTest::keyClicks(plainTextEdit, text, Qt::NoModifier,
-                         DemoVisualizer::isEnabled() ? DemoVisualizer::keyDelayMs() : 0);
+                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
     } else if (auto* textEdit = qobject_cast<QTextEdit*>(widget)) {
         if (textEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Text edit is read-only."));
         }
-        DemoVisualizer::prepareForTyping(widget);
+        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+            observer->prepareForTyping(widget);
+        }
         textEdit->setFocus();
         textEdit->selectAll();
         textEdit->textCursor().removeSelectedText();
         QTest::keyClicks(textEdit, text, Qt::NoModifier,
-                         DemoVisualizer::isEnabled() ? DemoVisualizer::keyDelayMs() : 0);
+                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
     } else {
         return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Widget does not support set_text."));
     }
 
-    if (DemoVisualizer::isEnabled()) {
-        DemoVisualizer::finishAction();
+    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+        observer->finishAction();
     } else {
         QTest::qWait(30);
     }

@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "demo_visualizer.h"
 
 #include <qtautotest/runtime.h>
 
@@ -11,7 +12,7 @@
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    QCoreApplication::setApplicationName(QStringLiteral("QtAgentAutotest"));
+    QCoreApplication::setApplicationName(QStringLiteral("QtAutoTestDemo"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
@@ -56,13 +57,15 @@ int main(int argc, char* argv[])
     qtautotest::Runtime runtime;
     qtautotest::RuntimeOptions runtimeOptions;
     runtimeOptions.port = static_cast<quint16>(port);
-    runtimeOptions.enableVisibleDemo = parser.isSet(demoVisibleOption);
-    runtimeOptions.demoSpeed = demoSpeed;
 
     if (!runtime.start(runtimeOptions)) {
         qCritical() << "无法在端口上启动桥接服务" << port << ":" << runtime.errorString();
         return 2;
     }
+
+    DemoVisualizer::install();
+    DemoVisualizer::setEnabled(parser.isSet(demoVisibleOption));
+    DemoVisualizer::setSpeedMultiplier(demoSpeed);
 
     MainWindow window(runtime.port());
     window.show();

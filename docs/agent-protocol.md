@@ -1,6 +1,6 @@
 # Agent Bridge Protocol
 
-`QtAgentAutotest` 会在本地启动一个 WebSocket 服务：
+接入了 `QtAutoTestRuntime` 的 Qt 应用会在本地启动一个 WebSocket 服务：
 
 - 地址：`ws://127.0.0.1:49555`
 - 消息格式：UTF-8 JSON

@@ -12,8 +12,6 @@ int main(int argc, char* argv[])
     qtautotest::Runtime runtime;
     qtautotest::RuntimeOptions options;
     options.port = 49600;
-    options.enableVisibleDemo = false;
-    options.demoSpeed = 1.0;
 
     if (!runtime.start(options)) {
         return 2;

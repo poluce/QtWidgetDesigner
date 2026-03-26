@@ -1,5 +1,6 @@
 #pragma once
 
+#include <qtautotest/action_observer.h>
 #include <qtautotest/actions.h>
 #include <qtautotest/bridge_client.h>
 #include <qtautotest/bridge_stream_client.h>

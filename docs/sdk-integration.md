@@ -14,6 +14,7 @@
 ```text
 sdk/
   include/qtautotest/
+    action_observer.h
     qtautotest.h
     actions.h
     bridge_client.h
@@ -26,9 +27,6 @@ sdk/
     ...
 
 mcp/qtautotest-mcp/
-  ...
-
-examples/demo-app/
   ...
 
 examples/sdk-consumer/
@@ -45,8 +43,6 @@ Qt 应用最小接入方式：
 qtautotest::Runtime runtime;
 qtautotest::RuntimeOptions options;
 options.port = 49555;
-options.enableVisibleDemo = false;
-options.demoSpeed = 1.0;
 
 runtime.start(options);
 ```
@@ -59,6 +55,8 @@ runtime.start(options);
   聚合总头
 - `qtautotest/runtime.h`
   Qt 应用内桥接运行时
+- `qtautotest/action_observer.h`
+  动作观察扩展点，可由外部工程注入可视化或录制逻辑
 - `qtautotest/bridge_client.h`
   直接调用桥接层的客户端
 - `qtautotest/harness.h`
@@ -116,6 +114,8 @@ QtAgentMcpServer.exe --bridge-url ws://127.0.0.1:49555
 ```
 
 这样外部 LLM 就不需要理解 Qt 细节，只要调用 MCP tools 即可。
+
+仓库中的 demo app 现在是一个独立工程，不属于 SDK 主构建链。
 
 ## 当前状态
 

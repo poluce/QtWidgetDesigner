@@ -1,6 +1,6 @@
 #include "main_window.h"
 
-#include "app_log_sink.h"
+#include <qtautotest/bridge_client.h>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -30,6 +30,7 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QUrl>
 
 MainWindow::MainWindow(quint16 bridgePort, QWidget* parent)
     : QMainWindow(parent)
@@ -460,7 +461,21 @@ void MainWindow::appendUiLog(const QString& line)
 
 void MainWindow::refreshBridgeLog()
 {
-    const QJsonArray entries = AppLogSink::instance().recentEntries(60);
+    qtautotest::BridgeClient bridgeClient(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(m_bridgePort)));
+    const qtautotest::BridgeCallResult callResult =
+        bridgeClient.call(QStringLiteral("get_logs"), QJsonObject{{QStringLiteral("limit"), 60}}, 1000);
+
+    if (!callResult.transportOk) {
+        return;
+    }
+    if (!callResult.response.value(QStringLiteral("ok")).toBool()) {
+        return;
+    }
+
+    const QJsonArray entries = callResult.response.value(QStringLiteral("result"))
+                                   .toObject()
+                                   .value(QStringLiteral("entries"))
+                                   .toArray();
 
     QStringList lines;
     for (const QJsonValue& value : entries) {

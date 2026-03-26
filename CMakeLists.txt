@@ -20,6 +20,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Test WebSockets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Test WebSockets)
 
 add_library(QtAutoTestRuntime
+    sdk/include/qtautotest/action_observer.h
     sdk/include/qtautotest/actions.h
     sdk/include/qtautotest/bridge_client.h
     sdk/include/qtautotest/bridge_stream_client.h
@@ -29,6 +30,7 @@ add_library(QtAutoTestRuntime
     sdk/include/qtautotest/selector.h
     sdk/include/qtautotest/snapshot.h
     sdk/include/qtautotest/version.h
+    sdk/src/action_observer.cpp
     sdk/src/bridge_client.cpp
     sdk/src/bridge_stream_client.cpp
     sdk/src/harness.cpp
@@ -39,8 +41,6 @@ add_library(QtAutoTestRuntime
     sdk/src/app_log_sink.h
     sdk/src/bridge_operations.cpp
     sdk/src/bridge_operations.h
-    sdk/src/demo_visualizer.cpp
-    sdk/src/demo_visualizer.h
     sdk/src/ui_event_monitor.cpp
     sdk/src/ui_event_monitor.h
     sdk/src/ui_action_executor.cpp
@@ -79,22 +79,6 @@ set_target_properties(QtAutoTestRuntime PROPERTIES
 )
 add_library(QtAutoTest::Runtime ALIAS QtAutoTestRuntime)
 
-add_executable(QtAgentAutotest
-    examples/demo-app/main.cpp
-    examples/demo-app/main_window.cpp
-    examples/demo-app/main_window.h
-)
-
-target_include_directories(QtAgentAutotest PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples/demo-app
-    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/src
-)
-
-target_link_libraries(QtAgentAutotest PRIVATE
-    QtAutoTestRuntime
-    Qt${QT_VERSION_MAJOR}::Widgets
-)
-
 add_executable(QtAgentMcpServer
     mcp/qtautotest-mcp/main.cpp
 )
@@ -117,6 +101,11 @@ install(TARGETS QtAutoTestRuntime QtAgentMcpServer
 )
 
 install(DIRECTORY sdk/include/ DESTINATION include)
+
+export(EXPORT QtAutoTestTargets
+    FILE ${CMAKE_CURRENT_BINARY_DIR}/QtAutoTestTargets.cmake
+    NAMESPACE QtAutoTest::
+)
 
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/QtAutoTestConfig.cmake.in

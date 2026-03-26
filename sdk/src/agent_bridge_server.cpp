@@ -50,7 +50,7 @@ namespace
 } // namespace
 
 AgentBridgeServer::AgentBridgeServer(QObject *parent)
-    : QObject(parent), m_server(new QWebSocketServer(QStringLiteral("QtAgentAutotest Agent Bridge"),
+    : QObject(parent), m_server(new QWebSocketServer(QStringLiteral("QtAutoTest Agent Bridge"),
                                                      QWebSocketServer::NonSecureMode, this)),
       m_eventMonitor(new UiEventMonitor(this))
 {

@@ -8,10 +8,10 @@
    一个可嵌入 Qt 应用的运行时桥接 SDK。
 2. `QtAgentMcpServer`
    一个独立的 MCP stdio server，把运行时桥接映射成外部 LLM 可直接调用的 tools。
-3. `QtAgentAutotest`
-   一个中文 demo app，用来展示 SDK 能力。
 
 它不内置 LLM 模型。真正的自主探索发生在外部 LLM 一侧，外部 Agent 通过 MCP tools 调用接入到目标 Qt 程序中的 SDK 能力。
+
+仓库内另有一个独立 demo 工程，见 [examples/demo-app/README.md](examples/demo-app/README.md)。
 
 ## 已提供的原子能力
 
@@ -36,29 +36,6 @@
 - 目标驱动测试
   接到“测试登录流程和计数器”后，自己拆解步骤、执行并验证。
 
-## 当前可展示场景
-
-当前 demo app 除了登录和计数器，还新增了几组更适合现场展示的场景：
-
-- 异步用户加载
-  点击 `loadUsersButton` 后，进度条推进，稍后用户列表和状态标签更新。
-- 选项面板
-  包含复选框、单选框和下拉框，适合演示 `toggle_check` 与 `choose_combo_option`。
-- 多标签页与堆叠页面
-  适合演示 `activate_tab`、`switch_stacked_page` 与当前页面上下文。
-- 树形与表格
-  适合演示 `expand_tree_node`、`select_item`。
-- 滚动区域
-  适合演示 `scroll` 与 `scroll_into_view`。
-- 延迟揭示隐藏面板
-  点击 `revealSecretButton` 后，隐藏区域会在稍后出现，适合演示等待类工具。
-- 可交互确认对话框
-  点击 `openConfirmDialogButton` 后会弹出一个真正的顶层 `QDialog`，外部 LLM 可以继续识别并点击确认/取消。
-- 双日志面板
-  左侧显示更适合人看的场景事件，右侧实时滚动显示桥接命令和应用日志。
-- 可视化演示模式
-  用户能看到光标慢速移动、高亮框、逐字输入和按钮按下释放过程。
-
 ## 核心架构
 
 - `QtAutoTestRuntime`
@@ -75,8 +52,6 @@
   捕获 `qDebug/qInfo/qWarning/qCritical` 日志，供外部代理读取。
 - `QtAgentMcpServer`
   独立 MCP server，可被外部 LLM/Agent 当成工具服务器使用。
-- `QtAgentAutotest`
-  中文示例应用，只是 SDK 的演示承载体，不是 SDK 本体。
 
 ## Bridge 命令
 
@@ -130,43 +105,16 @@ cmake --build build -j 4
 
 这会生成：
 
-- `build/QtAgentAutotest.exe`
 - `build/QtAgentMcpServer.exe`
 - `build/libQtAutoTestRuntime.a`
-
-## 运行 Demo App
-
-```powershell
-./build/QtAgentAutotest.exe --port 49555
-```
-
-如果要给用户做“看得见动作过程”的现场演示，可以打开可视化演示模式：
-
-```powershell
-./build/QtAgentAutotest.exe --port 49555 --demo-visible
-```
-
-也可以进一步控制演示倍速：
-
-```powershell
-./build/QtAgentAutotest.exe --port 49555 --demo-visible --demo-speed 0.5
-./build/QtAgentAutotest.exe --port 49555 --demo-visible --demo-speed 1
-./build/QtAgentAutotest.exe --port 49555 --demo-visible --demo-speed 2
-```
-
-开启后，用户可以在屏幕上看到：
-
-- 应用内模拟光标慢速移动到目标控件附近，不会抢走用户真实鼠标
-- 当前即将操作的控件被高亮
-- 输入框里逐字出现文字
-- 按钮按下和释放的过程，以及点击脉冲效果
-- 所有这些演示节奏会跟随 `--demo-speed` 一起变快或变慢
 
 ## 运行 MCP server
 
 ```powershell
 ./build/QtAgentMcpServer.exe --bridge-url ws://127.0.0.1:49555
 ```
+
+如果你要运行仓库内的独立 demo，请看 [examples/demo-app/README.md](examples/demo-app/README.md)。
 
 ## 外部 LLM 接入方式
 

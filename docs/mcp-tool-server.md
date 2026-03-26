@@ -2,7 +2,7 @@
 
 `QtAgentMcpServer` 是一个独立的 MCP stdio server。
 
-它的职责只有一件事：把 `QtAgentAutotest` 暴露出的桥接命令映射成 MCP tools，供外部 LLM/Agent 调用。
+它的职责只有一件事：把任意接入了 `QtAutoTestRuntime` 的 Qt 应用暴露出的桥接命令映射成 MCP tools，供外部 LLM/Agent 调用。
 
 它不内置模型，不负责测试规划，也不替外部 LLM 决定下一步做什么。
 
@@ -15,7 +15,7 @@ External LLM / Agent
 QtAgentMcpServer (MCP stdio tools)
         |
         v
-QtAgentAutotest Agent Bridge (WebSocket JSON)
+Qt Application Agent Bridge (WebSocket JSON)
         |
         v
 Qt Widgets Application
@@ -23,17 +23,9 @@ Qt Widgets Application
 
 ## 启动顺序
 
-1. 启动 Qt 应用
+1. 启动一个已接入 `QtAutoTestRuntime` 的 Qt 应用
 
-```powershell
-./build/QtAgentAutotest.exe --port 49555
-```
-
-如果要做对人类用户友好的可视化演示，可以改成：
-
-```powershell
-./build/QtAgentAutotest.exe --port 49555 --demo-visible
-```
+仓库内独立 demo 的具体启动方式见 [examples/demo-app/README.md](../examples/demo-app/README.md)。
 
 2. 启动 MCP server
 

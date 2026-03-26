@@ -8,8 +8,6 @@ namespace qtautotest {
 struct RuntimeOptions
 {
     quint16 port = 49555;
-    bool enableVisibleDemo = false;
-    double demoSpeed = 1.0;
 };
 
 class Runtime

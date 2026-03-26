@@ -2,7 +2,6 @@
 
 #include "agent_bridge_server.h"
 #include "app_log_sink.h"
-#include "demo_visualizer.h"
 
 namespace qtautotest {
 
@@ -33,8 +32,6 @@ bool Runtime::start(const RuntimeOptions& options)
     m_impl->error.clear();
 
     AppLogSink::install();
-    DemoVisualizer::setEnabled(options.enableVisibleDemo);
-    DemoVisualizer::setSpeedMultiplier(options.demoSpeed);
 
     m_impl->bridge = new AgentBridgeServer();
     if (!m_impl->bridge->start(options.port)) {
