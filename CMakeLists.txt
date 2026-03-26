@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(QtAutoTest LANGUAGES CXX)
+project(QtAutoTest LANGUAGES CXX VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN YES)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -18,6 +22,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Test WebSock
 add_library(QtAutoTestRuntime
     sdk/include/qtautotest/actions.h
     sdk/include/qtautotest/bridge_client.h
+    sdk/include/qtautotest/bridge_stream_client.h
     sdk/include/qtautotest/harness.h
     sdk/include/qtautotest/qtautotest.h
     sdk/include/qtautotest/runtime.h
@@ -25,6 +30,7 @@ add_library(QtAutoTestRuntime
     sdk/include/qtautotest/snapshot.h
     sdk/include/qtautotest/version.h
     sdk/src/bridge_client.cpp
+    sdk/src/bridge_stream_client.cpp
     sdk/src/harness.cpp
     sdk/src/runtime.cpp
     sdk/src/agent_bridge_server.cpp
@@ -35,6 +41,8 @@ add_library(QtAutoTestRuntime
     sdk/src/bridge_operations.h
     sdk/src/demo_visualizer.cpp
     sdk/src/demo_visualizer.h
+    sdk/src/ui_event_monitor.cpp
+    sdk/src/ui_event_monitor.h
     sdk/src/ui_action_executor.cpp
     sdk/src/ui_action_executor.h
     sdk/src/widget_introspection.cpp
@@ -57,7 +65,18 @@ target_link_libraries(QtAutoTestRuntime
         Qt${QT_VERSION_MAJOR}::WebSockets
 )
 
-set_target_properties(QtAutoTestRuntime PROPERTIES EXPORT_NAME Runtime)
+target_compile_features(QtAutoTestRuntime PUBLIC cxx_std_17)
+
+target_compile_options(QtAutoTestRuntime PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
+
+set_target_properties(QtAutoTestRuntime PROPERTIES
+    EXPORT_NAME Runtime
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 add_library(QtAutoTest::Runtime ALIAS QtAutoTestRuntime)
 
 add_executable(QtAgentAutotest
@@ -69,7 +88,6 @@ add_executable(QtAgentAutotest
 target_include_directories(QtAgentAutotest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/examples/demo-app
     ${CMAKE_CURRENT_SOURCE_DIR}/sdk/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include
 )
 
 target_link_libraries(QtAgentAutotest PRIVATE
@@ -108,7 +126,7 @@ configure_package_config_file(
 
 write_basic_package_version_file(
     ${CMAKE_CURRENT_BINARY_DIR}/QtAutoTestConfigVersion.cmake
-    VERSION 0.1.0
+    VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 

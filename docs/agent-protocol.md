@@ -99,6 +99,17 @@
 - `availableActions`
 - `children`
 
+样式读取命令 `describe_style` 返回的样式节点至少包含：
+
+- `widget`
+- `style.styleSheet`
+- `style.inheritsStyleSheet`
+- `style.autoFillBackground`
+- `style.currentColorGroup`
+- `style.roles`
+- `style.palette`
+- `style.classHints`
+
 其中：
 
 - `path` 便于外部 LLM 在多次观察时稳定引用控件
@@ -161,6 +172,28 @@
 - `selector`
 - `layoutTree`
 - `visibleOnly`
+
+### `describe_style`
+
+按 selector 读取单个控件的 palette 颜色、styleSheet 与标准样式摘要，支持参数：
+
+- `selector`
+- `includeChildren`
+
+返回重点：
+
+- `styleSheet`
+  当前控件自身的 styleSheet 原文
+- `inheritsStyleSheet`
+  当前控件自身没有 styleSheet，但祖先存在 styleSheet
+- `palette`
+  当前 / active / inactive / disabled 四组逻辑颜色
+- `roles`
+  `foregroundRole` / `backgroundRole` 以及解析后的颜色
+- `classHints`
+  针对标准控件补充的语义颜色，例如按钮填充色、文本色、输入框底色、高亮色
+
+这不是截图采样，不保证与最终像素颜色完全一致；它描述的是 Qt 当前可稳定读取的逻辑样式信息。
 
 ### `describe_active_page`
 

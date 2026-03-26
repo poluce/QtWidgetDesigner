@@ -2,6 +2,7 @@
 
 #include <qtautotest/actions.h>
 #include <qtautotest/bridge_client.h>
+#include <qtautotest/bridge_stream_client.h>
 #include <qtautotest/harness.h>
 #include <qtautotest/runtime.h>
 #include <qtautotest/selector.h>

@@ -18,6 +18,7 @@
 `QtAutoTestRuntime` 目前支持：
 
 - 读取对象树、布局树与活动页面快照
+- 读取标准控件的 palette 颜色、styleSheet 与样式摘要
 - 枚举和聚焦顶层窗口
 - 基于 `ref` / `path` / 祖先条件精确查找控件
 - 模拟真实点击、文本输入、按键与快捷键
@@ -85,6 +86,7 @@
 - `describe_object_tree`
 - `describe_layout_tree`
 - `describe_subtree`
+- `describe_style`
 - `describe_active_page`
 - `list_windows`
 - `focus_window`
@@ -192,6 +194,19 @@ cmake --build build -j 4
 - 当前自动化目标是 Qt Widgets，不包含 QML 和嵌入式浏览器 DOM。
 - 当前 MCP server 只负责工具适配，不做测试规划，不内置模型。
 - 当前桥接层默认只暴露低风险原子动作，避免外部探索时做 destructive 操作。
+
+## 当前缺口
+
+当前最小闭环已经可用，但离完整桌面自动化 SDK 还有一些明确缺口：
+
+- 菜单栏 / 右键菜单 / 工具栏的专门支持
+- Dock 窗口更细粒度操作
+- 拖拽与 Splitter 拖动
+- 更强的 scroll 语义，尤其复杂视图内部滚动
+- 更 typed 的 SDK API，减少直接暴露 `QJsonObject`
+- 更完整的 `BuildHarness`，补齐“构建 -> 启动 -> 自测”
+
+更详细的现状与优先级说明见 [docs/roadmap.md](docs/roadmap.md)。
 
 ## SDK 验证
 

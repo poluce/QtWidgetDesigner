@@ -121,10 +121,15 @@ QtAgentMcpServer.exe --bridge-url ws://127.0.0.1:49555
 
 这版已经形成了基本 SDK 骨架，但还有几项值得后续补齐：
 
-- 更多公共头文件，而不只是 `runtime.h` / `qtautotest.h`
+- 更 typed 的 SDK API，逐步减少 action / result 直接暴露 `QJsonObject`
+- 在 `ProcessHarness` 之上补齐“构建 -> 启动 -> 自测”的 `BuildHarness`
+- 菜单栏 / 右键菜单 / 工具栏的专门支持
+- Dock、拖拽、Splitter、复杂滚动等更完整的桌面交互语义
 - 更清晰的 public/private API 边界
 - 更完整的安装后 consumer 验证
 - 报告导出与录制回放层
+
+更细的能力拆分与优先级见 [roadmap.md](roadmap.md)。
 
 ## 一键验证
 

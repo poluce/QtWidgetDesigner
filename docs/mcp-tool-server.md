@@ -50,6 +50,7 @@ Qt Widgets Application
 - `qt_describe_object_tree`
 - `qt_describe_layout_tree`
 - `qt_describe_subtree`
+- `qt_describe_style`
 - `qt_describe_active_page`
 - `qt_list_windows`
 - `qt_focus_window`
@@ -77,6 +78,7 @@ Qt Widgets Application
 
 - MCP tool 名与桥接命令尽量一一对应，减少隐藏逻辑。
 - 快照优先返回结构化树，而不是先依赖截图。
+- 颜色与样式优先返回 palette / styleSheet 摘要，而不是先依赖截图采样。
 - `ref` 是首选锚点，selector 是兜底。
 - 成功时返回 `bridgeResult`。
 - 桥接失败时返回 `bridgeError`。
@@ -91,9 +93,10 @@ Qt Widgets Application
 
 1. `qt_describe_snapshot`
 2. `qt_describe_object_tree` / `qt_describe_layout_tree`
-3. 从结果中读取稳定 `ref`
-4. `qt_click` / `qt_set_text` / `qt_press_key` / `qt_scroll` / `qt_select_item`
-5. `qt_assert_widget` / `qt_wait_for_widget` / `qt_wait_for_log`
+3. 必要时 `qt_describe_style`
+4. 从结果中读取稳定 `ref`
+5. `qt_click` / `qt_set_text` / `qt_press_key` / `qt_scroll` / `qt_select_item`
+6. `qt_assert_widget` / `qt_wait_for_widget` / `qt_wait_for_log`
 
 更推荐的新流程是：
 
