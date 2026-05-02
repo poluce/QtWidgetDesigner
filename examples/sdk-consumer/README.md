@@ -4,16 +4,26 @@
 
 - `QtAutoTestRuntime` 能被安装
 - `find_package(QtAutoTest REQUIRED CONFIG)` 能找到 SDK
-- 外部 Qt Widgets 应用可以只通过 `qtautotest::Runtime` 接入自动化桥接
+- 外部 Qt Widgets 应用可以只通过 `qtautotest::install(...)` 接入自动化桥接
 
 ## 关键点
 
 - 不依赖仓库内部 `sdk/src` 私有头文件
 - 只使用安装后的公开头文件：
   - `<qtautotest/qtautotest.h>`
-  - `<qtautotest/runtime.h>`
 - 只链接公开 target：
   - `QtAutoTest::Runtime`
+
+## 当前示例的接入风格
+
+当前 consumer 示例使用推荐的极简入口：
+
+```cpp
+if (!qtautotest::install(app, options)) {
+    qCritical() << qtautotest::installErrorString();
+    return 2;
+}
+```
 
 ## 典型验证流程
 

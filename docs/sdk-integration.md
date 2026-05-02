@@ -15,9 +15,11 @@
 sdk/
   include/qtautotest/
     action_observer.h
+    automation_client.h
+    automation_event_client.h
+    build_harness.h
+    install.h
     qtautotest.h
-    actions.h
-    bridge_client.h
     harness.h
     runtime.h
     selector.h
@@ -40,11 +42,12 @@ Qt 应用最小接入方式：
 ```cpp
 #include <qtautotest/qtautotest.h>
 
-qtautotest::Runtime runtime;
-qtautotest::RuntimeOptions options;
-options.port = 49555;
+QApplication app(argc, argv);
 
-runtime.start(options);
+if (!qtautotest::install(app)) {
+    qCritical() << qtautotest::installErrorString();
+    return 2;
+}
 ```
 
 ## 公开 API
@@ -55,18 +58,22 @@ runtime.start(options);
   聚合总头
 - `qtautotest/runtime.h`
   Qt 应用内桥接运行时
+- `qtautotest/install.h`
+  推荐的极简安装入口
 - `qtautotest/action_observer.h`
   动作观察扩展点，可由外部工程注入可视化或录制逻辑
-- `qtautotest/bridge_client.h`
-  直接调用桥接层的客户端
+- `qtautotest/automation_client.h`
+  覆盖全部同步 bridge 命令的 typed 自动化客户端
+- `qtautotest/automation_event_client.h`
+  覆盖全部事件订阅能力的 typed 事件客户端
+- `qtautotest/build_harness.h`
+  configure / build / run / wait-ready 一体化 harness
 - `qtautotest/harness.h`
   外部进程启动/停止/等待就绪
 - `qtautotest/selector.h`
   结构化 selector 构造器
-- `qtautotest/actions.h`
-  常见动作参数构造器
 - `qtautotest/snapshot.h`
-  快照与节点轻量视图封装
+  快照、布局树、样式树、窗口截图等 typed 视图模型
 - `qtautotest/version.h`
   版本宏
 
@@ -88,6 +95,43 @@ harness.waitUntilReady();
 ```
 
 这个能力很适合“LLM 先改代码，再启动应用，再自测”的闭环。
+
+## 高层客户端
+
+`AutomationClient` 现在就是公开层的主入口，全部 bridge 命令都已经有 typed API：
+
+```cpp
+qtautotest::AutomationClient client;
+const auto clickResult = client.click(qtautotest::Selector::byObjectName("loginButton"));
+if (!clickResult) {
+    qCritical() << clickResult.error.message;
+}
+```
+
+它优先覆盖最常见的观察、点击、输入、等待与 tab 切换场景。
+
+事件订阅客户端也有对应的 typed 入口：
+
+```cpp
+qtautotest::AutomationEventClient events;
+events.setTabChangedHandler([](const qtautotest::TabChangedEvent& event) {
+    qDebug() << event.text;
+});
+events.connectToBridge();
+events.subscribe({{qtautotest::EventKind::TabChanged}});
+```
+
+## BuildHarness
+
+如果你想把“配置 -> 构建 -> 启动 -> wait-ready”串成一个统一入口，可以使用：
+
+```cpp
+qtautotest::BuildHarness harness;
+qtautotest::BuildHarnessOptions options;
+// configure / build / run options ...
+harness.run(options);
+harness.waitUntilReady();
+```
 
 ## CMake 集成
 
@@ -117,12 +161,20 @@ QtAgentMcpServer.exe --bridge-url ws://127.0.0.1:49555
 
 仓库中的 demo app 现在是一个独立工程，不属于 SDK 主构建链。
 
+## 脚本工具
+
+仓库还提供了几份面向接入便利性的脚本：
+
+- `tools/check-qt-environment.ps1`
+- `tools/verify-runtime-bridge.ps1`
+- `tools/scaffold-minimal-app.ps1`
+
 ## 当前状态
 
 这版已经形成了基本 SDK 骨架，但还有几项值得后续补齐：
 
-- 更 typed 的 SDK API，逐步减少 action / result 直接暴露 `QJsonObject`
-- 在 `ProcessHarness` 之上补齐“构建 -> 启动 -> 自测”的 `BuildHarness`
+- 更丰富的 typed 高层 helper，例如菜单、Dock、拖拽、Splitter 等新增命令落地后的同步封装
+- 在 `ProcessHarness` 之上继续增强 `BuildHarness`，补齐 smoke test / 自测回调 / 结果归档
 - 菜单栏 / 右键菜单 / 工具栏的专门支持
 - Dock、拖拽、Splitter、复杂滚动等更完整的桌面交互语义
 - 更清晰的 public/private API 边界

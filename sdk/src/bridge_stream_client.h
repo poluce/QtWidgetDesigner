@@ -1,9 +1,10 @@
 #pragma once
 
-#include <qtautotest/bridge_client.h>
+#include "bridge_client.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QMetaType>
 #include <QObject>
 #include <QStringList>
 #include <QUrl>

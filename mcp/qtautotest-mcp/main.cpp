@@ -1,4 +1,4 @@
-#include <qtautotest/bridge_client.h>
+#include "bridge_client.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>

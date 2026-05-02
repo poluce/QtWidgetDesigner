@@ -72,26 +72,24 @@
 - “滚到某一行/某个 item/某个 ref 可见”的更强语义
 - 对复杂视图内部滚动后的可见性和位置断言
 
-## SDK API 缺口
+## SDK API 状态
 
-### 更 typed 的 SDK API
+### 全量 typed bridge SDK 已完成
 
-当前对外已经有 `Selector`、`SnapshotNode`、`SnapshotView` 这类轻量封装，但不少动作参数和 bridge 结果仍然是 `QJsonObject` 驱动。
+当前公开 SDK 已经完成这几件事：
 
-下一步更理想的方向是：
+- 全部同步 bridge 命令都有 typed `AutomationClient` 方法
+- 事件订阅有独立的 typed `AutomationEventClient`
+- `Selector`、快照、布局树、样式树、等待结果、错误上下文都不再暴露 `QJsonObject`
+- 原始 JSON bridge client 已经下沉到 SDK 内部编解码层
 
-- 为常见 action 提供 typed request / response
-- 为断言、等待、选择、滚动提供明确的 option struct
-- 让 `BridgeClient` 支持 typed 封装，而不只是返回原始 JSON
-- 把“桥接协议 JSON 形状”与“SDK 对外 API 形状”分层
-
-这样可以降低 consumer 项目对协议细节的耦合，也让 IDE 补全、重构和错误发现更可靠。
+这意味着 consumer 项目现在可以在不接触协议 JSON 形状的前提下完成“观察 -> 行动 -> 验证 -> 订阅事件”的完整闭环。
 
 ### 更完整的 BuildHarness
 
-当前已经有 `ProcessHarness`，它适合解决“启动 -> 等待 ready -> 调 bridge”的问题；但“构建 -> 启动 -> 自测”的 build 步还没有抽成独立能力。
+当前已经有 `ProcessHarness` 和 `BuildHarness`，可以完成“配置 -> 构建 -> 启动 -> wait-ready”的闭环；但“启动后自动 smoke/self-test、结果归档、失败摘要”还不够完整。
 
-后续建议补一个更完整的 `BuildHarness`，统一封装：
+后续建议继续增强 `BuildHarness`，统一补齐：
 
 - 配置命令、构建命令、启动命令
 - 工作目录、环境变量、产物路径
@@ -109,10 +107,9 @@
 2. 菜单栏 / 右键菜单 / 工具栏支持
 3. Dock 窗口更细粒度操作
 4. 拖拽与 Splitter 拖动
-5. 更 typed 的 SDK API
-6. 更完整的 BuildHarness
+5. 更完整的 BuildHarness
 
-前四项直接影响桌面 UI 的可操作面；后两项更多影响 SDK 可维护性与工程化闭环。
+前四项直接影响桌面 UI 的可操作面；最后一项更多影响工程化闭环。
 
 ## 与现有文档的关系
 

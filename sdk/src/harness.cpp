@@ -90,8 +90,8 @@ bool ProcessHarness::waitUntilReady(int timeoutMs)
     timer.start();
 
     while (timer.elapsed() <= effectiveTimeoutMs) {
-        const BridgeCallResult result = bridgeClient().call(QStringLiteral("ping"), QJsonObject{}, 1000);
-        if (result.transportOk && result.response.value(QStringLiteral("ok")).toBool()) {
+        const OperationResult result = automationClient().ping();
+        if (result) {
             return true;
         }
 
@@ -117,9 +117,9 @@ QUrl ProcessHarness::bridgeUrl() const
     return m_impl->options.bridgeUrl;
 }
 
-BridgeClient ProcessHarness::bridgeClient() const
+AutomationClient ProcessHarness::automationClient() const
 {
-    return BridgeClient(m_impl->options.bridgeUrl);
+    return AutomationClient(m_impl->options.bridgeUrl);
 }
 
 } // namespace qtautotest

@@ -1,4 +1,4 @@
-#include <qtautotest/bridge_stream_client.h>
+#include "bridge_stream_client.h"
 
 #include <QAbstractSocket>
 #include <QEventLoop>

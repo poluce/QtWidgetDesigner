@@ -1,6 +1,6 @@
 #pragma once
 
-#include <qtautotest/bridge_client.h>
+#include <qtautotest/automation_client.h>
 
 #include <QProcessEnvironment>
 #include <QUrl>
@@ -34,7 +34,7 @@ public:
 
     QString errorString() const;
     QUrl bridgeUrl() const;
-    BridgeClient bridgeClient() const;
+    AutomationClient automationClient() const;
 
 private:
     class Impl;

@@ -10,20 +10,16 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
 
-    qtautotest::InstallOptions options;
-    options.port = 49600;
-
-    if (!qtautotest::install(app, options)) {
+    if (!qtautotest::install(app)) {
         qCritical() << "QtAutoTest install failed:" << qtautotest::installErrorString();
         return 2;
     }
 
     QWidget window;
-    window.setWindowTitle(QStringLiteral("QtAutoTest SDK 最小接入示例"));
+    window.setWindowTitle(QStringLiteral("__PROJECT_NAME__"));
 
     auto* layout = new QVBoxLayout(&window);
-    auto* label = new QLabel(QStringLiteral("这个窗口只通过 qtautotest::Runtime 接入了自动化桥接。"), &window);
-    layout->addWidget(label);
+    layout->addWidget(new QLabel(QStringLiteral("QtAutoTest minimal template is running."), &window));
 
     window.resize(420, 160);
     window.show();

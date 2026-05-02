@@ -20,20 +20,29 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Test WebSockets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Test WebSockets)
 
 add_library(QtAutoTestRuntime
+    sdk/include/qtautotest/automation_client.h
+    sdk/include/qtautotest/automation_event_client.h
+    sdk/include/qtautotest/build_harness.h
     sdk/include/qtautotest/action_observer.h
-    sdk/include/qtautotest/actions.h
-    sdk/include/qtautotest/bridge_client.h
-    sdk/include/qtautotest/bridge_stream_client.h
     sdk/include/qtautotest/harness.h
+    sdk/include/qtautotest/install.h
     sdk/include/qtautotest/qtautotest.h
     sdk/include/qtautotest/runtime.h
     sdk/include/qtautotest/selector.h
     sdk/include/qtautotest/snapshot.h
     sdk/include/qtautotest/version.h
     sdk/src/action_observer.cpp
+    sdk/src/automation_codec.cpp
+    sdk/src/automation_codec.h
+    sdk/src/automation_client.cpp
+    sdk/src/automation_event_client.cpp
     sdk/src/bridge_client.cpp
+    sdk/src/bridge_client.h
     sdk/src/bridge_stream_client.cpp
+    sdk/src/bridge_stream_client.h
+    sdk/src/build_harness.cpp
     sdk/src/harness.cpp
+    sdk/src/install.cpp
     sdk/src/runtime.cpp
     sdk/src/agent_bridge_server.cpp
     sdk/src/agent_bridge_server.h
@@ -86,6 +95,7 @@ add_executable(QtAgentMcpServer
 target_include_directories(QtAgentMcpServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/mcp/qtautotest-mcp
     ${CMAKE_CURRENT_SOURCE_DIR}/sdk/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/sdk/src
 )
 
 target_link_libraries(QtAgentMcpServer PRIVATE
@@ -100,7 +110,20 @@ install(TARGETS QtAutoTestRuntime QtAgentMcpServer
     INCLUDES DESTINATION include
 )
 
-install(DIRECTORY sdk/include/ DESTINATION include)
+install(FILES
+    sdk/include/qtautotest/action_observer.h
+    sdk/include/qtautotest/automation_client.h
+    sdk/include/qtautotest/automation_event_client.h
+    sdk/include/qtautotest/build_harness.h
+    sdk/include/qtautotest/harness.h
+    sdk/include/qtautotest/install.h
+    sdk/include/qtautotest/qtautotest.h
+    sdk/include/qtautotest/runtime.h
+    sdk/include/qtautotest/selector.h
+    sdk/include/qtautotest/snapshot.h
+    sdk/include/qtautotest/version.h
+    DESTINATION include/qtautotest
+)
 
 export(EXPORT QtAutoTestTargets
     FILE ${CMAKE_CURRENT_BINARY_DIR}/QtAutoTestTargets.cmake

@@ -1,6 +1,6 @@
 #include "main_window.h"
 
-#include <qtautotest/bridge_client.h>
+#include <qtautotest/automation_client.h>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -11,8 +11,6 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -461,28 +459,19 @@ void MainWindow::appendUiLog(const QString& line)
 
 void MainWindow::refreshBridgeLog()
 {
-    qtautotest::BridgeClient bridgeClient(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(m_bridgePort)));
-    const qtautotest::BridgeCallResult callResult =
-        bridgeClient.call(QStringLiteral("get_logs"), QJsonObject{{QStringLiteral("limit"), 60}}, 1000);
+    qtautotest::AutomationClient client(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(m_bridgePort)));
+    qtautotest::LogQuery query;
+    query.limit = 60;
+    const qtautotest::Result<QVector<qtautotest::LogEntry>> logResult = client.getLogs(query);
 
-    if (!callResult.transportOk) {
+    if (!logResult) {
         return;
     }
-    if (!callResult.response.value(QStringLiteral("ok")).toBool()) {
-        return;
-    }
-
-    const QJsonArray entries = callResult.response.value(QStringLiteral("result"))
-                                   .toObject()
-                                   .value(QStringLiteral("entries"))
-                                   .toArray();
 
     QStringList lines;
-    for (const QJsonValue& value : entries) {
-        const QJsonObject entry = value.toObject();
+    for (const qtautotest::LogEntry& entry : logResult.value) {
         lines.append(QStringLiteral("[%1] %2")
-                         .arg(entry.value(QStringLiteral("level")).toString(),
-                              entry.value(QStringLiteral("message")).toString()));
+                         .arg(entry.level, entry.message));
     }
 
     const QString snapshot = lines.join(QStringLiteral("\n"));
