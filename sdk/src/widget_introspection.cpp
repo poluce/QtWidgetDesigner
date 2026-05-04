@@ -56,6 +56,24 @@ namespace
         return instance;
     }
 
+    // 清理 QPointer 已失效但条目还残留的脏数据，防止地址复用导致 ref 冲突
+    void cleanupStaleEntries(RefRegistry &r)
+    {
+        QList<QString> staleRefs;
+        for (auto it = r.widgetByRef.constBegin(); it != r.widgetByRef.constEnd(); ++it)
+        {
+            if (it.value().isNull())
+            {
+                staleRefs.append(it.key());
+            }
+        }
+        for (const QString &ref : std::as_const(staleRefs))
+        {
+            r.refByPtr.remove(r.refByPtr.key(ref));
+            r.widgetByRef.remove(ref);
+        }
+    }
+
     QString ensureRef(const QWidget *widget)
     {
         if (widget == nullptr)
@@ -65,6 +83,10 @@ namespace
 
         RefRegistry &r = registry();
         QMutexLocker locker(&r.mutex);
+
+        // 先清理一次失效条目，防止地址复用导致冲突
+        cleanupStaleEntries(r);
+
         const quintptr key = reinterpret_cast<quintptr>(widget);
         const auto existing = r.refByPtr.constFind(key);
         if (existing != r.refByPtr.constEnd())
@@ -75,6 +97,16 @@ namespace
         const QString ref = QStringLiteral("w%1").arg(r.nextId++);
         r.refByPtr.insert(key, ref);
         r.widgetByRef.insert(ref, const_cast<QWidget *>(widget));
+
+        // 监听 widget 销毁事件，自动清理 registry 中的索引
+        QObject::connect(const_cast<QWidget *>(widget), &QObject::destroyed, &r,
+                         [&r, key, ref](QObject *)
+                         {
+                             QMutexLocker cleanupLocker(&r.mutex);
+                             r.refByPtr.remove(key);
+                             r.widgetByRef.remove(ref);
+                         });
+
         return ref;
     }
 
@@ -83,6 +115,10 @@ namespace
         const auto widgets = QApplication::allWidgets();
         RefRegistry &r = registry();
         QMutexLocker locker(&r.mutex);
+
+        // 先清理失效条目
+        cleanupStaleEntries(r);
+
         for (QWidget *widget : widgets)
         {
             if (widget == nullptr)
@@ -95,6 +131,15 @@ namespace
                 const QString ref = QStringLiteral("w%1").arg(r.nextId++);
                 r.refByPtr.insert(key, ref);
                 r.widgetByRef.insert(ref, const_cast<QWidget *>(widget));
+
+                // 监听 widget 销毁事件
+                QObject::connect(widget, &QObject::destroyed, &r,
+                                 [&r, key, ref](QObject *)
+                                 {
+                                     QMutexLocker cleanupLocker(&r.mutex);
+                                     r.refByPtr.remove(key);
+                                     r.widgetByRef.remove(ref);
+                                 });
             }
         }
     }

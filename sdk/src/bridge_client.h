@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QMutex>
 #include <QUrl>
 
 namespace qtautotest {
@@ -19,10 +20,11 @@ public:
 
     const QUrl& bridgeUrl() const;
     BridgeCallResult call(const QString& command, const QJsonObject& params = QJsonObject(),
-                          int timeoutMs = 5000) const;
+                          int timeoutMs = 5000);
 
 private:
     QUrl m_bridgeUrl;
+    mutable QMutex m_mutex;
 };
 
 } // namespace qtautotest

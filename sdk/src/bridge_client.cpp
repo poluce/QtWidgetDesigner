@@ -21,8 +21,10 @@ const QUrl& BridgeClient::bridgeUrl() const
     return m_bridgeUrl;
 }
 
-BridgeCallResult BridgeClient::call(const QString& command, const QJsonObject& params, int timeoutMs) const
+BridgeCallResult BridgeClient::call(const QString& command, const QJsonObject& params, int timeoutMs)
 {
+    QMutexLocker locker(&m_mutex);
+
     BridgeCallResult result;
 
     QJsonObject request = params;
