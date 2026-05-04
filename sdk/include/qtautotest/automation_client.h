@@ -410,10 +410,13 @@ struct OperationResult
     explicit operator bool() const { return ok(); }
 };
 
+class BridgeClient;
+
 class AutomationClient
 {
 public:
     explicit AutomationClient(QUrl bridgeUrl = QUrl(QStringLiteral("ws://127.0.0.1:49555")));
+    ~AutomationClient();
 
     const QUrl& bridgeUrl() const;
     void setBridgeUrl(QUrl bridgeUrl);
@@ -457,7 +460,10 @@ public:
     Result<LogMatchResult> waitForLog(const LogQuery& query, const WaitOptions& options = WaitOptions{}) const;
 
 private:
+    BridgeClient& client() const;
+
     QUrl m_bridgeUrl;
+    mutable BridgeClient* m_client = nullptr;
 };
 
 } // namespace qtautotest

@@ -43,9 +43,9 @@ OperationResult operationBridgeFailure(const QJsonObject& response)
 }
 
 template <typename T, typename Parser>
-Result<T> callAndParse(const QUrl& bridgeUrl, const QString& command, const QJsonObject& params, Parser parser)
+Result<T> callAndParse(BridgeClient& bridgeClient, const QString& command, const QJsonObject& params, Parser parser)
 {
-    const BridgeCallResult callResult = BridgeClient(bridgeUrl).call(command, params);
+    const BridgeCallResult callResult = bridgeClient.call(command, params);
     if (!callResult.transportOk) {
         return transportFailure<T>(callResult.transportError);
     }
@@ -58,9 +58,9 @@ Result<T> callAndParse(const QUrl& bridgeUrl, const QString& command, const QJso
     return result;
 }
 
-Result<ActionResult> callAction(const QUrl& bridgeUrl, const QString& command, const QJsonObject& params)
+Result<ActionResult> callAction(BridgeClient& bridgeClient, const QString& command, const QJsonObject& params)
 {
-    return callAndParse<ActionResult>(bridgeUrl, command, params, detail::parseActionResult);
+    return callAndParse<ActionResult>(bridgeClient, command, params, detail::parseActionResult);
 }
 
 bool logEntryMatches(const LogEntry& entry, const LogQuery& query)
@@ -87,6 +87,11 @@ AutomationClient::AutomationClient(QUrl bridgeUrl)
 {
 }
 
+AutomationClient::~AutomationClient()
+{
+    delete m_client;
+}
+
 const QUrl& AutomationClient::bridgeUrl() const
 {
     return m_bridgeUrl;
@@ -95,11 +100,26 @@ const QUrl& AutomationClient::bridgeUrl() const
 void AutomationClient::setBridgeUrl(QUrl bridgeUrl)
 {
     m_bridgeUrl = std::move(bridgeUrl);
+    // 下次访问 client() 时自动用新 URL 重建
+    delete m_client;
+    m_client = nullptr;
+}
+
+BridgeClient& AutomationClient::client() const
+{
+    if (m_client == nullptr) {
+        m_client = new BridgeClient(m_bridgeUrl);
+    } else if (m_client->bridgeUrl() != m_bridgeUrl) {
+        // URL 已变更，重建
+        delete m_client;
+        m_client = new BridgeClient(m_bridgeUrl);
+    }
+    return *m_client;
 }
 
 OperationResult AutomationClient::ping() const
 {
-    const BridgeCallResult callResult = BridgeClient(m_bridgeUrl).call(QStringLiteral("ping"));
+    const BridgeCallResult callResult = client().call(QStringLiteral("ping"));
     if (!callResult.transportOk) {
         return operationTransportFailure(callResult.transportError);
     }
@@ -112,8 +132,8 @@ OperationResult AutomationClient::ping() const
 
 Result<QVector<CommandKind>> AutomationClient::supportedCommands() const
 {
-    return callAndParse<QVector<CommandKind>>(m_bridgeUrl, QStringLiteral("list_commands"), QJsonObject{},
-                                              [](const QJsonObject& object) {
+    return callAndParse<QVector<CommandKind>>(client(), QStringLiteral("list_commands"), QJsonObject{},
+                                               [](const QJsonObject& object) {
         QVector<CommandKind> commands;
         const QJsonArray array = object.value(QStringLiteral("commands")).toArray();
         commands.reserve(array.size());
@@ -126,8 +146,8 @@ Result<QVector<CommandKind>> AutomationClient::supportedCommands() const
 
 Result<QVector<EventKind>> AutomationClient::supportedEvents() const
 {
-    return callAndParse<QVector<EventKind>>(m_bridgeUrl, QStringLiteral("list_event_types"), QJsonObject{},
-                                            [](const QJsonObject& object) {
+    return callAndParse<QVector<EventKind>>(client(), QStringLiteral("list_event_types"), QJsonObject{},
+                                             [](const QJsonObject& object) {
         QVector<EventKind> events;
         const QJsonArray array = object.value(QStringLiteral("events")).toArray();
         events.reserve(array.size());
@@ -140,70 +160,70 @@ Result<QVector<EventKind>> AutomationClient::supportedEvents() const
 
 Result<SnapshotView> AutomationClient::describeUi() const
 {
-    return callAndParse<SnapshotView>(m_bridgeUrl, QStringLiteral("describe_ui"), QJsonObject{},
-                                      detail::parseSnapshotView);
+    return callAndParse<SnapshotView>(client(), QStringLiteral("describe_ui"), QJsonObject{},
+                                       detail::parseSnapshotView);
 }
 
 Result<SnapshotView> AutomationClient::describeSnapshot() const
 {
-    return callAndParse<SnapshotView>(m_bridgeUrl, QStringLiteral("describe_snapshot"), QJsonObject{},
-                                      detail::parseSnapshotView);
+    return callAndParse<SnapshotView>(client(), QStringLiteral("describe_snapshot"), QJsonObject{},
+                                       detail::parseSnapshotView);
 }
 
 Result<ObjectTreeView> AutomationClient::describeObjectTree(const TreeOptions& options) const
 {
-    return callAndParse<ObjectTreeView>(m_bridgeUrl, QStringLiteral("describe_object_tree"),
-                                        QJsonObject{{QStringLiteral("visibleOnly"), options.visibleOnly}},
-                                        detail::parseObjectTreeView);
+    return callAndParse<ObjectTreeView>(client(), QStringLiteral("describe_object_tree"),
+                                         QJsonObject{{QStringLiteral("visibleOnly"), options.visibleOnly}},
+                                         detail::parseObjectTreeView);
 }
 
 Result<LayoutTreeView> AutomationClient::describeLayoutTree(const TreeOptions& options) const
 {
-    return callAndParse<LayoutTreeView>(m_bridgeUrl, QStringLiteral("describe_layout_tree"),
-                                        QJsonObject{{QStringLiteral("visibleOnly"), options.visibleOnly}},
-                                        detail::parseLayoutTreeView);
+    return callAndParse<LayoutTreeView>(client(), QStringLiteral("describe_layout_tree"),
+                                         QJsonObject{{QStringLiteral("visibleOnly"), options.visibleOnly}},
+                                         detail::parseLayoutTreeView);
 }
 
 Result<SubtreeView> AutomationClient::describeSubtree(const Selector& selector, const SubtreeOptions& options) const
 {
-    return callAndParse<SubtreeView>(m_bridgeUrl, QStringLiteral("describe_subtree"),
-                                     QJsonObject{
-                                         {QStringLiteral("selector"), detail::encodeSelector(selector)},
-                                         {QStringLiteral("layoutTree"), options.layoutTree},
-                                         {QStringLiteral("visibleOnly"), options.visibleOnly},
-                                     },
-                                     detail::parseSubtreeView);
+    return callAndParse<SubtreeView>(client(), QStringLiteral("describe_subtree"),
+                                      QJsonObject{
+                                          {QStringLiteral("selector"), detail::encodeSelector(selector)},
+                                          {QStringLiteral("layoutTree"), options.layoutTree},
+                                          {QStringLiteral("visibleOnly"), options.visibleOnly},
+                                      },
+                                      detail::parseSubtreeView);
 }
 
 Result<StyleTreeView> AutomationClient::describeStyle(const Selector& selector, const StyleOptions& options) const
 {
-    return callAndParse<StyleTreeView>(m_bridgeUrl, QStringLiteral("describe_style"),
-                                       QJsonObject{
-                                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
-                                           {QStringLiteral("includeChildren"), options.includeChildren},
-                                       },
-                                       detail::parseStyleTreeView);
+    return callAndParse<StyleTreeView>(client(), QStringLiteral("describe_style"),
+                                        QJsonObject{
+                                            {QStringLiteral("selector"), detail::encodeSelector(selector)},
+                                            {QStringLiteral("includeChildren"), options.includeChildren},
+                                        },
+                                        detail::parseStyleTreeView);
 }
 
 Result<ActivePageView> AutomationClient::describeActivePage() const
 {
-    return callAndParse<ActivePageView>(m_bridgeUrl, QStringLiteral("describe_active_page"), QJsonObject{},
-                                        detail::parseActivePageView);
+    return callAndParse<ActivePageView>(client(), QStringLiteral("describe_active_page"), QJsonObject{},
+                                         detail::parseActivePageView);
 }
 
 Result<QVector<WindowInfo>> AutomationClient::listWindows() const
 {
-    return callAndParse<QVector<WindowInfo>>(m_bridgeUrl, QStringLiteral("list_windows"), QJsonObject{},
-                                             [](const QJsonObject& object) {
+    return callAndParse<QVector<WindowInfo>>(client(), QStringLiteral("list_windows"), QJsonObject{},
+                                              [](const QJsonObject& object) {
         return detail::parseWindowInfos(object.value(QStringLiteral("windows")).toArray());
     });
 }
 
 Result<QVector<SnapshotNode>> AutomationClient::findWidgets(const Selector& selector) const
 {
-    return callAndParse<QVector<SnapshotNode>>(m_bridgeUrl, QStringLiteral("find_widgets"),
-                                               QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
-                                               [](const QJsonObject& object) {
+    return callAndParse<QVector<SnapshotNode>>(client(), QStringLiteral("find_widgets"),
+                                                QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
+                                                [](const QJsonObject& object) {
         return detail::parseSnapshotNodes(object.value(QStringLiteral("matches")).toArray());
     });
 }
@@ -211,9 +231,9 @@ Result<QVector<SnapshotNode>> AutomationClient::findWidgets(const Selector& sele
 Result<QVector<LogEntry>> AutomationClient::getLogs(const LogQuery& query) const
 {
     const int limit = query.limit > 0 ? query.limit : 50;
-    Result<QVector<LogEntry>> result = callAndParse<QVector<LogEntry>>(m_bridgeUrl, QStringLiteral("get_logs"),
-                                                                       QJsonObject{{QStringLiteral("limit"), limit}},
-                                                                       [](const QJsonObject& object) {
+    Result<QVector<LogEntry>> result = callAndParse<QVector<LogEntry>>(client(), QStringLiteral("get_logs"),
+                                                                        QJsonObject{{QStringLiteral("limit"), limit}},
+                                                                        [](const QJsonObject& object) {
         return detail::parseLogEntries(object.value(QStringLiteral("entries")).toArray());
     });
     if (!result) {
@@ -236,29 +256,29 @@ Result<QVector<LogEntry>> AutomationClient::getLogs(const LogQuery& query) const
 
 Result<WindowCapture> AutomationClient::captureWindow(const Selector& selector) const
 {
-    return callAndParse<WindowCapture>(m_bridgeUrl, QStringLiteral("capture_window"),
-                                       QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
-                                       detail::parseWindowCapture);
+    return callAndParse<WindowCapture>(client(), QStringLiteral("capture_window"),
+                                        QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
+                                        detail::parseWindowCapture);
 }
 
 Result<SnapshotNode> AutomationClient::focusWindow(const Selector& selector) const
 {
-    return callAndParse<SnapshotNode>(m_bridgeUrl, QStringLiteral("focus_window"),
-                                      QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
-                                      [](const QJsonObject& object) {
+    return callAndParse<SnapshotNode>(client(), QStringLiteral("focus_window"),
+                                       QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}},
+                                       [](const QJsonObject& object) {
         return detail::parseSnapshotNode(object.value(QStringLiteral("window")).toObject());
     });
 }
 
 Result<ActionResult> AutomationClient::click(const Selector& selector) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("click"),
+    return callAction(client(), QStringLiteral("click"),
                       QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}});
 }
 
 Result<ActionResult> AutomationClient::setText(const Selector& selector, const QString& text) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("set_text"),
+    return callAction(client(), QStringLiteral("set_text"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("text"), text},
@@ -276,7 +296,7 @@ Result<ActionResult> AutomationClient::pressKey(const Selector& selector, const 
         });
     }
 
-    return callAction(m_bridgeUrl, QStringLiteral("press_key"),
+    return callAction(client(), QStringLiteral("press_key"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("key"), detail::encodeKey(keyPress.key)},
@@ -295,7 +315,7 @@ Result<ActionResult> AutomationClient::sendShortcut(const Selector& selector, co
         });
     }
 
-    return callAction(m_bridgeUrl, QStringLiteral("send_shortcut"),
+    return callAction(client(), QStringLiteral("send_shortcut"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("shortcut"), shortcut.toString(QKeySequence::PortableText)},
@@ -304,7 +324,7 @@ Result<ActionResult> AutomationClient::sendShortcut(const Selector& selector, co
 
 Result<ActionResult> AutomationClient::scroll(const ScrollRequest& request) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("scroll"),
+    return callAction(client(), QStringLiteral("scroll"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(request.selector)},
                           {QStringLiteral("direction"), detail::encodeScrollDirection(request.direction)},
@@ -314,13 +334,13 @@ Result<ActionResult> AutomationClient::scroll(const ScrollRequest& request) cons
 
 Result<ActionResult> AutomationClient::scrollIntoView(const Selector& selector) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("scroll_into_view"),
+    return callAction(client(), QStringLiteral("scroll_into_view"),
                       QJsonObject{{QStringLiteral("selector"), detail::encodeSelector(selector)}});
 }
 
 Result<ActionResult> AutomationClient::selectListItem(const Selector& selector, const ListItemTarget& target) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("select_item"),
+    return callAction(client(), QStringLiteral("select_item"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("options"), detail::encodeListItemTarget(target)},
@@ -329,7 +349,7 @@ Result<ActionResult> AutomationClient::selectListItem(const Selector& selector, 
 
 Result<ActionResult> AutomationClient::selectTreeItem(const Selector& selector, const TreeItemTarget& target) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("select_item"),
+    return callAction(client(), QStringLiteral("select_item"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("options"), detail::encodeTreeItemTarget(target)},
@@ -338,7 +358,7 @@ Result<ActionResult> AutomationClient::selectTreeItem(const Selector& selector, 
 
 Result<ActionResult> AutomationClient::selectTableCell(const Selector& selector, int row, int column) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("select_item"),
+    return callAction(client(), QStringLiteral("select_item"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("options"), QJsonObject{
@@ -350,7 +370,7 @@ Result<ActionResult> AutomationClient::selectTableCell(const Selector& selector,
 
 Result<ActionResult> AutomationClient::setChecked(const Selector& selector, bool checked) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("toggle_check"),
+    return callAction(client(), QStringLiteral("toggle_check"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("checked"), checked},
@@ -364,7 +384,7 @@ Result<ActionResult> AutomationClient::chooseComboOption(const Selector& selecto
     };
     if (target.hasText()) params.insert(QStringLiteral("text"), target.text);
     if (target.hasIndex()) params.insert(QStringLiteral("index"), target.index);
-    return callAction(m_bridgeUrl, QStringLiteral("choose_combo_option"), params);
+    return callAction(client(), QStringLiteral("choose_combo_option"), params);
 }
 
 Result<ActionResult> AutomationClient::activateTab(const Selector& selector, const ChoiceTarget& target) const
@@ -374,12 +394,12 @@ Result<ActionResult> AutomationClient::activateTab(const Selector& selector, con
     };
     if (target.hasText()) params.insert(QStringLiteral("text"), target.text);
     if (target.hasIndex()) params.insert(QStringLiteral("index"), target.index);
-    return callAction(m_bridgeUrl, QStringLiteral("activate_tab"), params);
+    return callAction(client(), QStringLiteral("activate_tab"), params);
 }
 
 Result<ActionResult> AutomationClient::switchStackedPage(const Selector& selector, int index) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("switch_stacked_page"),
+    return callAction(client(), QStringLiteral("switch_stacked_page"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("index"), index},
@@ -388,7 +408,7 @@ Result<ActionResult> AutomationClient::switchStackedPage(const Selector& selecto
 
 Result<ActionResult> AutomationClient::expandTreeNode(const Selector& selector, const QStringList& path) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("expand_tree_node"),
+    return callAction(client(), QStringLiteral("expand_tree_node"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("path"), detail::encodeTreePath(path)},
@@ -397,7 +417,7 @@ Result<ActionResult> AutomationClient::expandTreeNode(const Selector& selector, 
 
 Result<ActionResult> AutomationClient::collapseTreeNode(const Selector& selector, const QStringList& path) const
 {
-    return callAction(m_bridgeUrl, QStringLiteral("collapse_tree_node"),
+    return callAction(client(), QStringLiteral("collapse_tree_node"),
                       QJsonObject{
                           {QStringLiteral("selector"), detail::encodeSelector(selector)},
                           {QStringLiteral("path"), detail::encodeTreePath(path)},
@@ -406,38 +426,38 @@ Result<ActionResult> AutomationClient::collapseTreeNode(const Selector& selector
 
 Result<WidgetCheckResult> AutomationClient::assertWidget(const Selector& selector, const WidgetAssertions& assertions) const
 {
-    return callAndParse<WidgetCheckResult>(m_bridgeUrl, QStringLiteral("assert_widget"),
-                                           QJsonObject{
-                                               {QStringLiteral("selector"), detail::encodeSelector(selector)},
-                                               {QStringLiteral("assertions"), detail::encodeWidgetAssertions(assertions)},
-                                           },
-                                           detail::parseWidgetCheckResult);
+    return callAndParse<WidgetCheckResult>(client(), QStringLiteral("assert_widget"),
+                                            QJsonObject{
+                                                {QStringLiteral("selector"), detail::encodeSelector(selector)},
+                                                {QStringLiteral("assertions"), detail::encodeWidgetAssertions(assertions)},
+                                            },
+                                            detail::parseWidgetCheckResult);
 }
 
 Result<WidgetCheckResult> AutomationClient::waitForWidget(const Selector& selector, const WidgetAssertions& assertions,
                                                           const WaitOptions& options) const
 {
-    return callAndParse<WidgetCheckResult>(m_bridgeUrl, QStringLiteral("wait_for_widget"),
-                                           QJsonObject{
-                                               {QStringLiteral("selector"), detail::encodeSelector(selector)},
-                                               {QStringLiteral("assertions"), detail::encodeWidgetAssertions(assertions)},
-                                               {QStringLiteral("timeoutMs"), options.timeoutMs},
-                                               {QStringLiteral("pollIntervalMs"), options.pollIntervalMs},
-                                           },
-                                           detail::parseWidgetCheckResult);
+    return callAndParse<WidgetCheckResult>(client(), QStringLiteral("wait_for_widget"),
+                                            QJsonObject{
+                                                {QStringLiteral("selector"), detail::encodeSelector(selector)},
+                                                {QStringLiteral("assertions"), detail::encodeWidgetAssertions(assertions)},
+                                                {QStringLiteral("timeoutMs"), options.timeoutMs},
+                                                {QStringLiteral("pollIntervalMs"), options.pollIntervalMs},
+                                            },
+                                            detail::parseWidgetCheckResult);
 }
 
 Result<LogMatchResult> AutomationClient::waitForLog(const LogQuery& query, const WaitOptions& options) const
 {
-    return callAndParse<LogMatchResult>(m_bridgeUrl, QStringLiteral("wait_for_log"),
-                                        QJsonObject{
-                                            {QStringLiteral("textContains"), query.textContains},
-                                            {QStringLiteral("regex"), query.regex},
-                                            {QStringLiteral("limit"), query.limit},
-                                            {QStringLiteral("timeoutMs"), options.timeoutMs},
-                                            {QStringLiteral("pollIntervalMs"), options.pollIntervalMs},
-                                        },
-                                        detail::parseLogMatchResult);
+    return callAndParse<LogMatchResult>(client(), QStringLiteral("wait_for_log"),
+                                         QJsonObject{
+                                             {QStringLiteral("textContains"), query.textContains},
+                                             {QStringLiteral("regex"), query.regex},
+                                             {QStringLiteral("limit"), query.limit},
+                                             {QStringLiteral("timeoutMs"), options.timeoutMs},
+                                             {QStringLiteral("pollIntervalMs"), options.pollIntervalMs},
+                                         },
+                                         detail::parseLogMatchResult);
 }
 
 } // namespace qtautotest
