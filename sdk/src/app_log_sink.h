@@ -24,14 +24,19 @@ private:
         QString message;
     };
 
-    AppLogSink() = default;
+    AppLogSink();
 
     void append(QtMsgType type, const QMessageLogContext& context, const QString& message);
     static void messageHandler(QtMsgType type, const QMessageLogContext& context, const QString& message);
     static QString levelForType(QtMsgType type);
 
     mutable QMutex m_mutex;
+
+    // 固定大小环形缓冲，避免 QVector::remove(0) 的 O(n) 元素搬移
+    static constexpr int kCapacity = 2000;
     QVector<LogEntry> m_entries;
+    int m_head = 0;   // 最老元素的逻辑索引
+    int m_count = 0;  // 当前有效元素个数
+
     QtMessageHandler m_previousHandler = nullptr;
-    const int m_capacity = 2000;
 };

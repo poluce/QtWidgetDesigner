@@ -31,6 +31,8 @@ add_library(QtAutoTestRuntime
     sdk/include/qtautotest/selector.h
     sdk/include/qtautotest/snapshot.h
     sdk/include/qtautotest/version.h
+    sdk/src/abstract_bridge_client.cpp
+    sdk/src/abstract_bridge_client.h
     sdk/src/action_observer.cpp
     sdk/src/automation_codec.cpp
     sdk/src/automation_codec.h

@@ -5,9 +5,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonParseError>
 #include <QTimer>
-#include <QUuid>
 #include <QWebSocket>
 
 namespace qtautotest {
@@ -15,27 +13,20 @@ namespace qtautotest {
 class BridgeStreamClient::Impl
 {
 public:
-    QUrl bridgeUrl = QUrl(QStringLiteral("ws://127.0.0.1:49555"));
     QWebSocket socket;
     QString error;
-    QHash<QString, QJsonObject> responsesById;
 };
 
-namespace {
-
-QString makeRequestId()
-{
-    return QUuid::createUuid().toString(QUuid::WithoutBraces);
-}
-
-} // namespace
-
 BridgeStreamClient::BridgeStreamClient(QObject* parent)
-    : QObject(parent)
+    : AbstractBridgeClient(parent)
     , m_impl(new Impl())
 {
     qRegisterMetaType<qtautotest::BridgeEvent>("qtautotest::BridgeEvent");
 
+    // 指向值成员，基类通过 m_socket 操作
+    m_socket = &m_impl->socket;
+
+    // 持久化信号连接
     QObject::connect(&m_impl->socket, &QWebSocket::connected, this, [this]() {
         m_impl->error.clear();
         emit connected();
@@ -45,31 +36,11 @@ BridgeStreamClient::BridgeStreamClient(QObject* parent)
         emit disconnected();
     });
 
-    QObject::connect(&m_impl->socket, &QWebSocket::textMessageReceived, this, [this](const QString& message) {
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(message.toUtf8(), &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            m_impl->error = QStringLiteral("Bridge returned invalid JSON.");
-            emit transportError(m_impl->error);
-            return;
-        }
-
-        const QJsonObject object = document.object();
-        if (object.value(QStringLiteral("type")).toString() == QStringLiteral("event")) {
-            BridgeEvent event;
-            event.event = object.value(QStringLiteral("event")).toString();
-            event.subscriptionId = object.value(QStringLiteral("subscriptionId")).toString();
-            event.sequence = static_cast<qint64>(object.value(QStringLiteral("sequence")).toDouble());
-            event.payload = object.value(QStringLiteral("payload")).toObject();
-            emit eventReceived(event);
-            return;
-        }
-
-        const QString responseId = object.value(QStringLiteral("id")).toString();
-        if (!responseId.isEmpty()) {
-            m_impl->responsesById.insert(responseId, object);
-        }
-    });
+    QObject::connect(&m_impl->socket, &QWebSocket::textMessageReceived, this,
+                     [this](const QString& message) {
+                         // 基类负责解析 JSON + 路由
+                         AbstractBridgeClient::onTextMessageReceived(message);
+                     });
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     QObject::connect(&m_impl->socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
@@ -95,28 +66,34 @@ BridgeStreamClient::BridgeStreamClient(QUrl bridgeUrl, QObject* parent)
 
 BridgeStreamClient::~BridgeStreamClient()
 {
-    disconnectFromBridge();
+    // m_socket 指向 m_impl->socket（值成员），基类 disconnectFromBridge 会 deleteLater
+    // 所以先断开 + 置空指针，让基类析构时跳过
+    if (m_impl->socket.state() != QAbstractSocket::UnconnectedState) {
+        m_impl->socket.close();
+    }
+    m_pendingResponses.clear();
+    m_socket = nullptr;
     delete m_impl;
 }
 
-const QUrl& BridgeStreamClient::bridgeUrl() const
-{
-    return m_impl->bridgeUrl;
-}
-
-void BridgeStreamClient::setBridgeUrl(QUrl bridgeUrl)
-{
-    m_impl->bridgeUrl = std::move(bridgeUrl);
-}
-
 bool BridgeStreamClient::connectToBridge(int timeoutMs)
+{
+    return ensureConnected(timeoutMs);
+}
+
+QString BridgeStreamClient::errorString() const
+{
+    return m_impl->error;
+}
+
+bool BridgeStreamClient::ensureConnected(int timeoutMs)
 {
     if (isConnected()) {
         return true;
     }
 
     m_impl->error.clear();
-    m_impl->responsesById.clear();
+    m_pendingResponses.clear();
 
     if (m_impl->socket.state() != QAbstractSocket::UnconnectedState) {
         m_impl->socket.abort();
@@ -145,88 +122,26 @@ bool BridgeStreamClient::connectToBridge(int timeoutMs)
     });
 
     timer.start(timeoutMs > 0 ? timeoutMs : 5000);
-    m_impl->socket.open(m_impl->bridgeUrl);
+    m_impl->socket.open(m_bridgeUrl);
     loop.exec();
 
     return connectedOk;
 }
 
-void BridgeStreamClient::disconnectFromBridge()
+bool BridgeStreamClient::handleJsonMessage(const QJsonObject& object)
 {
-    m_impl->responsesById.clear();
-    if (m_impl->socket.state() == QAbstractSocket::UnconnectedState) {
-        return;
-    }
-    m_impl->socket.close();
-}
-
-bool BridgeStreamClient::isConnected() const
-{
-    return m_impl->socket.state() == QAbstractSocket::ConnectedState;
-}
-
-QString BridgeStreamClient::errorString() const
-{
-    return m_impl->error;
-}
-
-BridgeCallResult BridgeStreamClient::call(const QString& command, const QJsonObject& params, int timeoutMs)
-{
-    BridgeCallResult result;
-
-    if (!isConnected() && !connectToBridge(timeoutMs)) {
-        result.transportError = errorString();
-        return result;
+    // 识别事件帧
+    if (object.value(QStringLiteral("type")).toString() == QStringLiteral("event")) {
+        BridgeEvent event;
+        event.event = object.value(QStringLiteral("event")).toString();
+        event.subscriptionId = object.value(QStringLiteral("subscriptionId")).toString();
+        event.sequence = static_cast<qint64>(object.value(QStringLiteral("sequence")).toDouble());
+        event.payload = object.value(QStringLiteral("payload")).toObject();
+        emit eventReceived(event);
+        return true; // 已处理，不再路由到 pendingResponses
     }
 
-    QJsonObject request = params;
-    const QString requestId = makeRequestId();
-    request.insert(QStringLiteral("id"), requestId);
-    request.insert(QStringLiteral("command"), command);
-
-    const QJsonDocument document(request);
-    m_impl->socket.sendTextMessage(QString::fromUtf8(document.toJson(QJsonDocument::Compact)));
-
-    QEventLoop loop;
-    QTimer timer;
-    timer.setSingleShot(true);
-
-    QObject::connect(&timer, &QTimer::timeout, &loop, [&]() {
-        result.transportError = QStringLiteral("Timed out waiting for bridge response.");
-        loop.quit();
-    });
-
-    QObject::connect(this, &BridgeStreamClient::transportError, &loop, [&]() {
-        if (result.transportError.isEmpty()) {
-            result.transportError = errorString();
-        }
-        loop.quit();
-    });
-
-    QObject::connect(&m_impl->socket, &QWebSocket::disconnected, &loop, [&]() {
-        if (result.transportError.isEmpty()) {
-            result.transportError = QStringLiteral("Bridge connection was closed.");
-        }
-        loop.quit();
-    });
-
-    QObject::connect(&m_impl->socket, &QWebSocket::textMessageReceived, &loop, [&](const QString&) {
-        if (m_impl->responsesById.contains(requestId)) {
-            loop.quit();
-        }
-    });
-
-    timer.start(timeoutMs > 0 ? timeoutMs : 5000);
-    loop.exec();
-
-    if (m_impl->responsesById.contains(requestId)) {
-        result.transportOk = true;
-        result.response = m_impl->responsesById.take(requestId);
-    } else if (result.transportError.isEmpty()) {
-        result.transportError = QStringLiteral("Bridge request failed.");
-    }
-
-    return result;
+    return false; // 让基类按 id 存入 pendingResponses
 }
 
 BridgeCallResult BridgeStreamClient::subscribe(const QStringList& events, const QJsonArray& selectors,
