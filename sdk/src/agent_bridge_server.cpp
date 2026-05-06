@@ -57,6 +57,8 @@ AgentBridgeServer::AgentBridgeServer(QObject *parent)
     connect(m_server, &QWebSocketServer::newConnection, this, &AgentBridgeServer::handleNewConnection);
     connect(m_eventMonitor, &UiEventMonitor::eventObserved,
             this, &AgentBridgeServer::handleUiEvent);
+
+    initCommandHandlers();
 }
 
 AgentBridgeServer::~AgentBridgeServer()
@@ -87,6 +89,307 @@ quint16 AgentBridgeServer::port() const
 QString AgentBridgeServer::errorString() const
 {
     return m_server->errorString();
+}
+
+void AgentBridgeServer::initCommandHandlers()
+{
+    // ---- 无参数只读命令 ----
+    m_commandHandlers[QStringLiteral("ping")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return successResponse(id, QJsonObject{{"message", QStringLiteral("pong")}});
+    };
+
+    m_commandHandlers[QStringLiteral("list_commands")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        QJsonArray commands;
+        commands.reserve(m_commandHandlers.size());
+        for (auto it = m_commandHandlers.constBegin(); it != m_commandHandlers.constEnd(); ++it) {
+            commands.append(it.key());
+        }
+        // 保证确定性顺序（m_commandHandlers 是 QHash，无序）
+        std::sort(commands.begin(), commands.end(),
+                  [](const QJsonValue &a, const QJsonValue &b) { return a.toString() < b.toString(); });
+        return successResponse(id, QJsonObject{{QStringLiteral("commands"), commands}});
+    };
+
+    m_commandHandlers[QStringLiteral("list_event_types")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return successResponse(id, QJsonObject{{QStringLiteral("events"), supportedEventTypesJson()}});
+    };
+
+    m_commandHandlers[QStringLiteral("describe_ui")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return successResponse(id, WidgetIntrospection::describeUi());
+    };
+
+    m_commandHandlers[QStringLiteral("describe_snapshot")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::describeSnapshot());
+    };
+
+    m_commandHandlers[QStringLiteral("describe_active_page")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::describeActivePage());
+    };
+
+    m_commandHandlers[QStringLiteral("list_windows")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::listWindows());
+    };
+
+    // ---- 布尔参数只读命令 ----
+    auto visibleOnlyHandler = [this](const QString &command, const QJsonObject &request, const QJsonValue &id) {
+        const bool visibleOnly = request.value(QStringLiteral("visibleOnly")).toBool(false);
+        if (command == QStringLiteral("describe_object_tree")) {
+            return wrapResult(id, BridgeOperations::describeObjectTree(visibleOnly));
+        }
+        return wrapResult(id, BridgeOperations::describeLayoutTree(visibleOnly));
+    };
+
+    m_commandHandlers[QStringLiteral("describe_object_tree")] = [visibleOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return visibleOnlyHandler(QStringLiteral("describe_object_tree"), req, id);
+    };
+
+    m_commandHandlers[QStringLiteral("describe_layout_tree")] = [visibleOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return visibleOnlyHandler(QStringLiteral("describe_layout_tree"), req, id);
+    };
+
+    // ---- 带 selector 的只读命令 ----
+    auto selectorOnlyHandler = [this](const QString &bridgeCommand, const QJsonObject &request, const QJsonValue &id) {
+        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
+
+        if (bridgeCommand == QStringLiteral("describe_subtree")) {
+            const bool layoutTree = request.value(QStringLiteral("layoutTree")).toBool(false);
+            const bool visibleOnly = request.value(QStringLiteral("visibleOnly")).toBool(false);
+            return wrapResult(id, BridgeOperations::describeSubtree(selector, layoutTree, visibleOnly));
+        }
+
+        if (bridgeCommand == QStringLiteral("describe_style")) {
+            const bool includeChildren = request.value(QStringLiteral("includeChildren")).toBool(false);
+            QString errorCode;
+            QString errorMessage;
+            QJsonArray candidates;
+            const QJsonObject result = WidgetIntrospection::describeStyle(
+                selector, includeChildren, &errorCode, &errorMessage, &candidates);
+            if (result.isEmpty()) {
+                QJsonObject details;
+                if (!candidates.isEmpty()) {
+                    details.insert(QStringLiteral("candidates"), candidates);
+                }
+                return errorResponse(id, errorCode, errorMessage, details);
+            }
+            return successResponse(id, result);
+        }
+
+        if (bridgeCommand == QStringLiteral("focus_window")) {
+            return wrapResult(id, BridgeOperations::focusWindow(selector));
+        }
+
+        if (bridgeCommand == QStringLiteral("find_widgets")) {
+            return successResponse(id, QJsonObject{{QStringLiteral("matches"), WidgetIntrospection::findWidgets(selector)}});
+        }
+
+        if (bridgeCommand == QStringLiteral("capture_window")) {
+            return wrapResult(id, UiActionExecutor::captureWindow(selector));
+        }
+
+        return errorResponse(id, QStringLiteral("unknown_command"), QString());
+    };
+
+    m_commandHandlers[QStringLiteral("describe_subtree")] = [selectorOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return selectorOnlyHandler(QStringLiteral("describe_subtree"), req, id);
+    };
+    m_commandHandlers[QStringLiteral("describe_style")] = [selectorOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return selectorOnlyHandler(QStringLiteral("describe_style"), req, id);
+    };
+    m_commandHandlers[QStringLiteral("focus_window")] = [selectorOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return selectorOnlyHandler(QStringLiteral("focus_window"), req, id);
+    };
+    m_commandHandlers[QStringLiteral("find_widgets")] = [selectorOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return selectorOnlyHandler(QStringLiteral("find_widgets"), req, id);
+    };
+    m_commandHandlers[QStringLiteral("capture_window")] = [selectorOnlyHandler](QWebSocket *, const QJsonObject &req, const QJsonValue &id) {
+        return selectorOnlyHandler(QStringLiteral("capture_window"), req, id);
+    };
+
+    // ---- 动作命令（selector + 参数） ----
+    m_commandHandlers[QStringLiteral("click")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::click(request.value(QStringLiteral("selector")).toObject()));
+    };
+
+    m_commandHandlers[QStringLiteral("set_text")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::setText(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("text")).toString()));
+    };
+
+    m_commandHandlers[QStringLiteral("press_key")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::pressKey(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("key")).toString(),
+                              request.value(QStringLiteral("modifiers")).toString()));
+    };
+
+    m_commandHandlers[QStringLiteral("send_shortcut")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::sendShortcut(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("shortcut")).toString()));
+    };
+
+    m_commandHandlers[QStringLiteral("scroll")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::scroll(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("direction")).toString(),
+                              request.value(QStringLiteral("amount")).toInt(kDefaultScrollAmount)));
+    };
+
+    m_commandHandlers[QStringLiteral("scroll_into_view")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::scrollIntoView(
+                              request.value(QStringLiteral("selector")).toObject()));
+    };
+
+    m_commandHandlers[QStringLiteral("select_item")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::selectItem(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("options")).toObject()));
+    };
+
+    m_commandHandlers[QStringLiteral("toggle_check")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::toggleCheck(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("checked")).toBool()));
+    };
+
+    m_commandHandlers[QStringLiteral("choose_combo_option")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::chooseComboOption(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("text")).toString(),
+                              request.value(QStringLiteral("index")).toInt(-1)));
+    };
+
+    m_commandHandlers[QStringLiteral("activate_tab")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::activateTab(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("text")).toString(),
+                              request.value(QStringLiteral("index")).toInt(-1)));
+    };
+
+    m_commandHandlers[QStringLiteral("switch_stacked_page")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::switchStackedPage(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("index")).toInt(-1)));
+    };
+
+    m_commandHandlers[QStringLiteral("expand_tree_node")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::expandTreeNode(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("path")).toArray()));
+    };
+
+    m_commandHandlers[QStringLiteral("collapse_tree_node")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, UiActionExecutor::collapseTreeNode(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("path")).toArray()));
+    };
+
+    // ---- 订阅管理（需要 socket） ----
+    m_commandHandlers[QStringLiteral("subscribe")] = [this](QWebSocket *socket, const QJsonObject &request, const QJsonValue &id) {
+        const QJsonArray eventsArray = request.value(QStringLiteral("events")).toArray();
+        if (eventsArray.isEmpty()) {
+            return errorResponse(id, QStringLiteral("missing_events"),
+                                 QStringLiteral("Subscribe requires at least one event name."));
+        }
+
+        QStringList events;
+        QStringList invalidEvents;
+        const QStringList supported = supportedEventTypes();
+        for (const QJsonValue &value : eventsArray) {
+            const QString eventName = value.toString();
+            if (eventName.isEmpty()) continue;
+            if (!supported.contains(eventName)) {
+                invalidEvents.append(eventName);
+                continue;
+            }
+            if (!events.contains(eventName)) {
+                events.append(eventName);
+            }
+        }
+
+        if (events.isEmpty()) {
+            return errorResponse(id, QStringLiteral("missing_events"),
+                                 QStringLiteral("Subscribe requires at least one valid event name."));
+        }
+
+        if (!invalidEvents.isEmpty()) {
+            return errorResponse(id, QStringLiteral("unsupported_event"),
+                                 QStringLiteral("Subscribe requested unsupported events."),
+                                 QJsonObject{{QStringLiteral("events"), QJsonArray::fromStringList(invalidEvents)}});
+        }
+
+        const QJsonArray selectors = request.value(QStringLiteral("selectors")).toArray();
+        for (const QJsonValue &selectorValue : selectors) {
+            if (!selectorValue.isObject()) {
+                return errorResponse(id, QStringLiteral("invalid_selector"),
+                                     QStringLiteral("Each selector must be a JSON object."));
+            }
+        }
+
+        EventSubscription subscription;
+        subscription.id = QStringLiteral("sub-%1").arg(m_nextSubscriptionId++);
+        subscription.socket = socket;
+        subscription.events = events;
+        subscription.selectors = selectors;
+        subscription.debounceMs = qMax(0, request.value(QStringLiteral("debounceMs")).toInt(kDefaultDebounceMs));
+        m_subscriptions.append(subscription);
+
+        return successResponse(id, QJsonObject{
+                                   {QStringLiteral("subscriptionId"), subscription.id},
+                                   {QStringLiteral("events"), QJsonArray::fromStringList(subscription.events)},
+                                   {QStringLiteral("debounceMs"), subscription.debounceMs},
+                               });
+    };
+
+    m_commandHandlers[QStringLiteral("unsubscribe")] = [this](QWebSocket *socket, const QJsonObject &request, const QJsonValue &id) {
+        const QString subscriptionId = request.value(QStringLiteral("subscriptionId")).toString();
+        if (subscriptionId.isEmpty()) {
+            return errorResponse(id, QStringLiteral("missing_subscription_id"),
+                                 QStringLiteral("Unsubscribe requires subscriptionId."));
+        }
+
+        for (int i = 0; i < m_subscriptions.size(); ++i) {
+            const EventSubscription &subscription = m_subscriptions.at(i);
+            if (subscription.id == subscriptionId && subscription.socket == socket) {
+                m_subscriptions.removeAt(i);
+                return successResponse(id, QJsonObject{{QStringLiteral("subscriptionId"), subscriptionId}});
+            }
+        }
+
+        return errorResponse(id, QStringLiteral("subscription_not_found"),
+                             QStringLiteral("Subscription was not found for this connection."));
+    };
+
+    // ---- 断言和等待 ----
+    m_commandHandlers[QStringLiteral("assert_widget")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::assertWidget(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("assertions")).toObject()));
+    };
+
+    m_commandHandlers[QStringLiteral("wait_for_widget")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::waitForWidget(
+                              request.value(QStringLiteral("selector")).toObject(),
+                              request.value(QStringLiteral("assertions")).toObject(),
+                              request.value(QStringLiteral("timeoutMs")).toInt(kDefaultTimeoutMs),
+                              request.value(QStringLiteral("pollIntervalMs")).toInt(kDefaultPollIntervalMs)));
+    };
+
+    m_commandHandlers[QStringLiteral("wait_for_log")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        return wrapResult(id, BridgeOperations::waitForLog(
+                              request.value(QStringLiteral("textContains")).toString(),
+                              request.value(QStringLiteral("regex")).toString(),
+                              request.value(QStringLiteral("timeoutMs")).toInt(kDefaultTimeoutMs),
+                              request.value(QStringLiteral("pollIntervalMs")).toInt(kDefaultPollIntervalMs),
+                              request.value(QStringLiteral("limit")).toInt(kDefaultWaitLogLimit)));
+    };
+
+    // ---- 日志 ----
+    m_commandHandlers[QStringLiteral("get_logs")] = [this](QWebSocket *, const QJsonObject &request, const QJsonValue &id) {
+        const int limit = request.value(QStringLiteral("limit")).toInt(kDefaultLogLimit);
+        return successResponse(id, QJsonObject{{QStringLiteral("entries"), AppLogSink::instance().recentEntries(limit)}});
+    };
 }
 
 void AgentBridgeServer::handleNewConnection()
@@ -236,365 +539,10 @@ QJsonObject AgentBridgeServer::dispatch(QWebSocket *socket, const QJsonObject &r
     qInfo().noquote() << QStringLiteral("[桥接] 命令=%1 载荷=%2")
                              .arg(command, QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact)));
 
-    if (command == QStringLiteral("ping"))
+    const auto it = m_commandHandlers.constFind(command);
+    if (it != m_commandHandlers.constEnd())
     {
-        return successResponse(id, QJsonObject{{"message", QStringLiteral("pong")}});
-    }
-
-    if (command == QStringLiteral("list_commands"))
-    {
-        return successResponse(id, QJsonObject{
-                                       {"commands", QJsonArray{
-                                                        QStringLiteral("ping"),
-                                                        QStringLiteral("list_commands"),
-                                                        QStringLiteral("list_event_types"),
-                                                        QStringLiteral("subscribe"),
-                                                        QStringLiteral("unsubscribe"),
-                                                        QStringLiteral("describe_ui"),
-                                                        QStringLiteral("describe_snapshot"),
-                                                        QStringLiteral("describe_object_tree"),
-                                                        QStringLiteral("describe_layout_tree"),
-                                                        QStringLiteral("describe_subtree"),
-                                                        QStringLiteral("describe_style"),
-                                                        QStringLiteral("describe_active_page"),
-                                                        QStringLiteral("list_windows"),
-                                                        QStringLiteral("focus_window"),
-                                                        QStringLiteral("find_widgets"),
-                                                        QStringLiteral("click"),
-                                                        QStringLiteral("set_text"),
-                                                        QStringLiteral("press_key"),
-                                                        QStringLiteral("send_shortcut"),
-                                                        QStringLiteral("scroll"),
-                                                        QStringLiteral("scroll_into_view"),
-                                                        QStringLiteral("select_item"),
-                                                        QStringLiteral("toggle_check"),
-                                                        QStringLiteral("choose_combo_option"),
-                                                        QStringLiteral("activate_tab"),
-                                                        QStringLiteral("switch_stacked_page"),
-                                                        QStringLiteral("expand_tree_node"),
-                                                        QStringLiteral("collapse_tree_node"),
-                                                        QStringLiteral("assert_widget"),
-                                                        QStringLiteral("wait_for_widget"),
-                                                        QStringLiteral("wait_for_log"),
-                                                        QStringLiteral("get_logs"),
-                                                        QStringLiteral("capture_window"),
-                                                    }},
-                                   });
-    }
-
-    if (command == QStringLiteral("list_event_types"))
-    {
-        return successResponse(id, QJsonObject{
-                                       {"events", supportedEventTypesJson()},
-                                   });
-    }
-
-    if (command == QStringLiteral("subscribe"))
-    {
-        const QJsonArray eventsArray = request.value(QStringLiteral("events")).toArray();
-        if (eventsArray.isEmpty())
-        {
-            return errorResponse(id, QStringLiteral("missing_events"),
-                                 QStringLiteral("Subscribe requires at least one event name."));
-        }
-
-        QStringList events;
-        QStringList invalidEvents;
-        const QStringList supported = supportedEventTypes();
-        for (const QJsonValue &value : eventsArray)
-        {
-            const QString eventName = value.toString();
-            if (eventName.isEmpty())
-            {
-                continue;
-            }
-            if (!supported.contains(eventName))
-            {
-                invalidEvents.append(eventName);
-                continue;
-            }
-            if (!events.contains(eventName))
-            {
-                events.append(eventName);
-            }
-        }
-
-        if (events.isEmpty())
-        {
-            return errorResponse(id, QStringLiteral("missing_events"),
-                                 QStringLiteral("Subscribe requires at least one valid event name."));
-        }
-
-        if (!invalidEvents.isEmpty())
-        {
-            return errorResponse(id, QStringLiteral("unsupported_event"),
-                                 QStringLiteral("Subscribe requested unsupported events."),
-                                 QJsonObject{{"events", QJsonArray::fromStringList(invalidEvents)}});
-        }
-
-        const QJsonArray selectors = request.value(QStringLiteral("selectors")).toArray();
-        for (const QJsonValue &selectorValue : selectors)
-        {
-            if (!selectorValue.isObject())
-            {
-                return errorResponse(id, QStringLiteral("invalid_selector"),
-                                     QStringLiteral("Each selector must be a JSON object."));
-            }
-        }
-
-        EventSubscription subscription;
-        subscription.id = QStringLiteral("sub-%1").arg(m_nextSubscriptionId++);
-        subscription.socket = socket;
-        subscription.events = events;
-        subscription.selectors = selectors;
-        subscription.debounceMs = qMax(0, request.value(QStringLiteral("debounceMs")).toInt(kDefaultDebounceMs));
-        m_subscriptions.append(subscription);
-
-        return successResponse(id, QJsonObject{
-                                       {"subscriptionId", subscription.id},
-                                       {"events", QJsonArray::fromStringList(subscription.events)},
-                                       {"debounceMs", subscription.debounceMs},
-                                   });
-    }
-
-    if (command == QStringLiteral("unsubscribe"))
-    {
-        const QString subscriptionId = request.value(QStringLiteral("subscriptionId")).toString();
-        if (subscriptionId.isEmpty())
-        {
-            return errorResponse(id, QStringLiteral("missing_subscription_id"),
-                                 QStringLiteral("Unsubscribe requires subscriptionId."));
-        }
-
-        for (int i = 0; i < m_subscriptions.size(); ++i)
-        {
-            const EventSubscription &subscription = m_subscriptions.at(i);
-            if (subscription.id == subscriptionId && subscription.socket == socket)
-            {
-                m_subscriptions.removeAt(i);
-                return successResponse(id, QJsonObject{{"subscriptionId", subscriptionId}});
-            }
-        }
-
-        return errorResponse(id, QStringLiteral("subscription_not_found"),
-                             QStringLiteral("Subscription was not found for this connection."));
-    }
-
-    if (command == QStringLiteral("describe_ui"))
-    {
-        return successResponse(id, WidgetIntrospection::describeUi());
-    }
-
-    // Helper: wrap a command result into success/error response
-    auto wrapResult = [&](const QJsonObject &result) -> QJsonObject
-    {
-        QJsonObject details = result;
-        details.remove(QStringLiteral("ok"));
-        if (!result.value(QStringLiteral("ok")).toBool())
-        {
-            return errorResponse(id, result.value(QStringLiteral("code")).toString(),
-                                 result.value(QStringLiteral("message")).toString(), details);
-        }
-        return successResponse(id, details);
-    };
-
-    if (command == QStringLiteral("describe_snapshot"))
-    {
-        return wrapResult(BridgeOperations::describeSnapshot());
-    }
-
-    if (command == QStringLiteral("describe_object_tree"))
-    {
-        const bool visibleOnly = request.value(QStringLiteral("visibleOnly")).toBool(false);
-        return wrapResult(BridgeOperations::describeObjectTree(visibleOnly));
-    }
-
-    if (command == QStringLiteral("describe_layout_tree"))
-    {
-        const bool visibleOnly = request.value(QStringLiteral("visibleOnly")).toBool(false);
-        return wrapResult(BridgeOperations::describeLayoutTree(visibleOnly));
-    }
-
-    if (command == QStringLiteral("describe_subtree"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const bool layoutTree = request.value(QStringLiteral("layoutTree")).toBool(false);
-        const bool visibleOnly = request.value(QStringLiteral("visibleOnly")).toBool(false);
-        return wrapResult(BridgeOperations::describeSubtree(selector, layoutTree, visibleOnly));
-    }
-
-    if (command == QStringLiteral("describe_style"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const bool includeChildren = request.value(QStringLiteral("includeChildren")).toBool(false);
-        QString errorCode;
-        QString errorMessage;
-        QJsonArray candidates;
-        const QJsonObject result = WidgetIntrospection::describeStyle(
-            selector, includeChildren, &errorCode, &errorMessage, &candidates);
-        if (result.isEmpty())
-        {
-            QJsonObject details;
-            if (!candidates.isEmpty())
-            {
-                details.insert(QStringLiteral("candidates"), candidates);
-            }
-            return errorResponse(id, errorCode, errorMessage, details);
-        }
-        return successResponse(id, result);
-    }
-
-    if (command == QStringLiteral("describe_active_page"))
-    {
-        return wrapResult(BridgeOperations::describeActivePage());
-    }
-
-    if (command == QStringLiteral("list_windows"))
-    {
-        return wrapResult(BridgeOperations::listWindows());
-    }
-
-    if (command == QStringLiteral("focus_window"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        return wrapResult(BridgeOperations::focusWindow(selector));
-    }
-
-    if (command == QStringLiteral("find_widgets"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        return successResponse(id, QJsonObject{{"matches", WidgetIntrospection::findWidgets(selector)}});
-    }
-
-    if (command == QStringLiteral("click"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        return wrapResult(UiActionExecutor::click(selector));
-    }
-
-    if (command == QStringLiteral("set_text"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString text = request.value(QStringLiteral("text")).toString();
-        return wrapResult(UiActionExecutor::setText(selector, text));
-    }
-
-    if (command == QStringLiteral("press_key"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString key = request.value(QStringLiteral("key")).toString();
-        const QString modifiers = request.value(QStringLiteral("modifiers")).toString();
-        return wrapResult(UiActionExecutor::pressKey(selector, key, modifiers));
-    }
-
-    if (command == QStringLiteral("send_shortcut"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString shortcut = request.value(QStringLiteral("shortcut")).toString();
-        return wrapResult(UiActionExecutor::sendShortcut(selector, shortcut));
-    }
-
-    if (command == QStringLiteral("scroll"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString direction = request.value(QStringLiteral("direction")).toString();
-        const int amount = request.value(QStringLiteral("amount")).toInt(kDefaultScrollAmount);
-        return wrapResult(UiActionExecutor::scroll(selector, direction, amount));
-    }
-
-    if (command == QStringLiteral("scroll_into_view"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        return wrapResult(UiActionExecutor::scrollIntoView(selector));
-    }
-
-    if (command == QStringLiteral("select_item"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QJsonObject options = request.value(QStringLiteral("options")).toObject();
-        return wrapResult(UiActionExecutor::selectItem(selector, options));
-    }
-
-    if (command == QStringLiteral("toggle_check"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const bool checked = request.value(QStringLiteral("checked")).toBool();
-        return wrapResult(UiActionExecutor::toggleCheck(selector, checked));
-    }
-
-    if (command == QStringLiteral("choose_combo_option"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString text = request.value(QStringLiteral("text")).toString();
-        const int index = request.value(QStringLiteral("index")).toInt(-1);
-        return wrapResult(UiActionExecutor::chooseComboOption(selector, text, index));
-    }
-
-    if (command == QStringLiteral("activate_tab"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QString text = request.value(QStringLiteral("text")).toString();
-        const int index = request.value(QStringLiteral("index")).toInt(-1);
-        return wrapResult(UiActionExecutor::activateTab(selector, text, index));
-    }
-
-    if (command == QStringLiteral("switch_stacked_page"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const int index = request.value(QStringLiteral("index")).toInt(-1);
-        return wrapResult(UiActionExecutor::switchStackedPage(selector, index));
-    }
-
-    if (command == QStringLiteral("expand_tree_node"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QJsonArray path = request.value(QStringLiteral("path")).toArray();
-        return wrapResult(UiActionExecutor::expandTreeNode(selector, path));
-    }
-
-    if (command == QStringLiteral("collapse_tree_node"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QJsonArray path = request.value(QStringLiteral("path")).toArray();
-        return wrapResult(UiActionExecutor::collapseTreeNode(selector, path));
-    }
-
-    if (command == QStringLiteral("get_logs"))
-    {
-        const int limit = request.value(QStringLiteral("limit")).toInt(kDefaultLogLimit);
-        return successResponse(id, QJsonObject{{"entries", AppLogSink::instance().recentEntries(limit)}});
-    }
-
-    if (command == QStringLiteral("assert_widget"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QJsonObject assertions = request.value(QStringLiteral("assertions")).toObject();
-        return wrapResult(BridgeOperations::assertWidget(selector, assertions));
-    }
-
-    if (command == QStringLiteral("wait_for_widget"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        const QJsonObject assertions = request.value(QStringLiteral("assertions")).toObject();
-        const int timeoutMs = request.value(QStringLiteral("timeoutMs")).toInt(kDefaultTimeoutMs);
-        const int pollIntervalMs = request.value(QStringLiteral("pollIntervalMs")).toInt(kDefaultPollIntervalMs);
-        return wrapResult(BridgeOperations::waitForWidget(selector, assertions, timeoutMs, pollIntervalMs));
-    }
-
-    if (command == QStringLiteral("wait_for_log"))
-    {
-        const QString textContains = request.value(QStringLiteral("textContains")).toString();
-        const QString regex = request.value(QStringLiteral("regex")).toString();
-        const int timeoutMs = request.value(QStringLiteral("timeoutMs")).toInt(kDefaultTimeoutMs);
-        const int pollIntervalMs = request.value(QStringLiteral("pollIntervalMs")).toInt(kDefaultPollIntervalMs);
-        const int limit = request.value(QStringLiteral("limit")).toInt(kDefaultWaitLogLimit);
-        return wrapResult(BridgeOperations::waitForLog(textContains, regex, timeoutMs, pollIntervalMs, limit));
-    }
-
-    if (command == QStringLiteral("capture_window"))
-    {
-        const QJsonObject selector = request.value(QStringLiteral("selector")).toObject();
-        return wrapResult(UiActionExecutor::captureWindow(selector));
+        return it.value()(socket, request, id);
     }
 
     return errorResponse(id, QStringLiteral("unknown_command"),
@@ -644,4 +592,16 @@ QJsonObject AgentBridgeServer::errorResponse(const QJsonValue &id, const QString
     }
 
     return response;
+}
+
+QJsonObject AgentBridgeServer::wrapResult(const QJsonValue &id, const QJsonObject &result) const
+{
+    QJsonObject details = result;
+    details.remove(QStringLiteral("ok"));
+    if (!result.value(QStringLiteral("ok")).toBool())
+    {
+        return errorResponse(id, result.value(QStringLiteral("code")).toString(),
+                             result.value(QStringLiteral("message")).toString(), details);
+    }
+    return successResponse(id, details);
 }

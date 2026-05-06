@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTextStream>
+#include <functional>
 
 namespace
 {
@@ -492,296 +493,47 @@ namespace
         return tools;
     }
 
-    QJsonObject buildBridgeParams(const QString &toolName, const QJsonObject &arguments)
+    struct ToolEntry
     {
-        if (toolName == QStringLiteral("qt_describe_object_tree") ||
-            toolName == QStringLiteral("qt_describe_layout_tree"))
-        {
-            return QJsonObject{
-                {"visibleOnly", arguments.value(QStringLiteral("visibleOnly")).toBool(false)},
-            };
-        }
+        QString bridgeCommand;
+        std::function<QJsonObject(const QJsonObject &arguments)> buildParams;
+    };
 
-        if (toolName == QStringLiteral("qt_describe_subtree"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"layoutTree", arguments.value(QStringLiteral("layoutTree")).toBool(false)},
-                {"visibleOnly", arguments.value(QStringLiteral("visibleOnly")).toBool(false)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_describe_style"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"includeChildren", arguments.value(QStringLiteral("includeChildren")).toBool(false)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_focus_window") ||
-            toolName == QStringLiteral("qt_find_widgets") ||
-            toolName == QStringLiteral("qt_click") ||
-            toolName == QStringLiteral("qt_capture_window"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_set_text"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"text", arguments.value(QStringLiteral("text")).toString()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_assert_widget"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"assertions", arguments.value(QStringLiteral("assertions")).toObject()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_wait_for_widget"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"assertions", arguments.value(QStringLiteral("assertions")).toObject()},
-                {"timeoutMs", arguments.value(QStringLiteral("timeoutMs")).toInt(3000)},
-                {"pollIntervalMs", arguments.value(QStringLiteral("pollIntervalMs")).toInt(100)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_wait_for_log"))
-        {
-            return QJsonObject{
-                {"textContains", arguments.value(QStringLiteral("textContains")).toString()},
-                {"regex", arguments.value(QStringLiteral("regex")).toString()},
-                {"timeoutMs", arguments.value(QStringLiteral("timeoutMs")).toInt(3000)},
-                {"pollIntervalMs", arguments.value(QStringLiteral("pollIntervalMs")).toInt(100)},
-                {"limit", qMin(arguments.value(QStringLiteral("limit")).toInt(200), kMaxLogLimit)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_get_logs"))
-        {
-            return QJsonObject{
-                {"limit", qMin(arguments.value(QStringLiteral("limit")).toInt(50), kMaxLogLimit)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_press_key"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"key", arguments.value(QStringLiteral("key")).toString()},
-                {"modifiers", arguments.value(QStringLiteral("modifiers")).toString()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_send_shortcut"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"shortcut", arguments.value(QStringLiteral("shortcut")).toString()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_scroll"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"direction", arguments.value(QStringLiteral("direction")).toString()},
-                {"amount", arguments.value(QStringLiteral("amount")).toInt(120)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_scroll_into_view"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_select_item"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"options", arguments.value(QStringLiteral("options")).toObject()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_toggle_check"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"checked", arguments.value(QStringLiteral("checked")).toBool()},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_choose_combo_option"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"text", arguments.value(QStringLiteral("text")).toString()},
-                {"index", arguments.value(QStringLiteral("index")).toInt(-1)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_activate_tab"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"text", arguments.value(QStringLiteral("text")).toString()},
-                {"index", arguments.value(QStringLiteral("index")).toInt(-1)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_switch_stacked_page"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"index", arguments.value(QStringLiteral("index")).toInt(-1)},
-            };
-        }
-
-        if (toolName == QStringLiteral("qt_expand_tree_node") ||
-            toolName == QStringLiteral("qt_collapse_tree_node"))
-        {
-            return QJsonObject{
-                {"selector", arguments.value(QStringLiteral("selector")).toObject()},
-                {"path", arguments.value(QStringLiteral("path")).toArray()},
-            };
-        }
-
-        return QJsonObject{};
-    }
-
-    QString bridgeCommandForTool(const QString &toolName)
-    {
-        if (toolName == QStringLiteral("qt_describe_ui"))
-        {
-            return QStringLiteral("describe_ui");
-        }
-        if (toolName == QStringLiteral("qt_describe_snapshot"))
-        {
-            return QStringLiteral("describe_snapshot");
-        }
-        if (toolName == QStringLiteral("qt_describe_object_tree"))
-        {
-            return QStringLiteral("describe_object_tree");
-        }
-        if (toolName == QStringLiteral("qt_describe_layout_tree"))
-        {
-            return QStringLiteral("describe_layout_tree");
-        }
-        if (toolName == QStringLiteral("qt_describe_subtree"))
-        {
-            return QStringLiteral("describe_subtree");
-        }
-        if (toolName == QStringLiteral("qt_describe_style"))
-        {
-            return QStringLiteral("describe_style");
-        }
-        if (toolName == QStringLiteral("qt_describe_active_page"))
-        {
-            return QStringLiteral("describe_active_page");
-        }
-        if (toolName == QStringLiteral("qt_list_windows"))
-        {
-            return QStringLiteral("list_windows");
-        }
-        if (toolName == QStringLiteral("qt_focus_window"))
-        {
-            return QStringLiteral("focus_window");
-        }
-        if (toolName == QStringLiteral("qt_find_widgets"))
-        {
-            return QStringLiteral("find_widgets");
-        }
-        if (toolName == QStringLiteral("qt_click"))
-        {
-            return QStringLiteral("click");
-        }
-        if (toolName == QStringLiteral("qt_set_text"))
-        {
-            return QStringLiteral("set_text");
-        }
-        if (toolName == QStringLiteral("qt_press_key"))
-        {
-            return QStringLiteral("press_key");
-        }
-        if (toolName == QStringLiteral("qt_send_shortcut"))
-        {
-            return QStringLiteral("send_shortcut");
-        }
-        if (toolName == QStringLiteral("qt_scroll"))
-        {
-            return QStringLiteral("scroll");
-        }
-        if (toolName == QStringLiteral("qt_scroll_into_view"))
-        {
-            return QStringLiteral("scroll_into_view");
-        }
-        if (toolName == QStringLiteral("qt_select_item"))
-        {
-            return QStringLiteral("select_item");
-        }
-        if (toolName == QStringLiteral("qt_toggle_check"))
-        {
-            return QStringLiteral("toggle_check");
-        }
-        if (toolName == QStringLiteral("qt_choose_combo_option"))
-        {
-            return QStringLiteral("choose_combo_option");
-        }
-        if (toolName == QStringLiteral("qt_activate_tab"))
-        {
-            return QStringLiteral("activate_tab");
-        }
-        if (toolName == QStringLiteral("qt_switch_stacked_page"))
-        {
-            return QStringLiteral("switch_stacked_page");
-        }
-        if (toolName == QStringLiteral("qt_expand_tree_node"))
-        {
-            return QStringLiteral("expand_tree_node");
-        }
-        if (toolName == QStringLiteral("qt_collapse_tree_node"))
-        {
-            return QStringLiteral("collapse_tree_node");
-        }
-        if (toolName == QStringLiteral("qt_assert_widget"))
-        {
-            return QStringLiteral("assert_widget");
-        }
-        if (toolName == QStringLiteral("qt_wait_for_widget"))
-        {
-            return QStringLiteral("wait_for_widget");
-        }
-        if (toolName == QStringLiteral("qt_wait_for_log"))
-        {
-            return QStringLiteral("wait_for_log");
-        }
-        if (toolName == QStringLiteral("qt_get_logs"))
-        {
-            return QStringLiteral("get_logs");
-        }
-        if (toolName == QStringLiteral("qt_capture_window"))
-        {
-            return QStringLiteral("capture_window");
-        }
-
-        return QString();
-    }
+    static const QHash<QString, ToolEntry> toolMap = {
+        {QStringLiteral("qt_describe_ui"),              {QStringLiteral("describe_ui"),              [](const QJsonObject &) { return QJsonObject{}; }}},
+        {QStringLiteral("qt_describe_snapshot"),         {QStringLiteral("describe_snapshot"),         [](const QJsonObject &) { return QJsonObject{}; }}},
+        {QStringLiteral("qt_describe_active_page"),      {QStringLiteral("describe_active_page"),      [](const QJsonObject &) { return QJsonObject{}; }}},
+        {QStringLiteral("qt_list_windows"),              {QStringLiteral("list_windows"),              [](const QJsonObject &) { return QJsonObject{}; }}},
+        {QStringLiteral("qt_describe_object_tree"),      {QStringLiteral("describe_object_tree"),      [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("visibleOnly"), a.value(QStringLiteral("visibleOnly")).toBool(false)}}; }}},
+        {QStringLiteral("qt_describe_layout_tree"),      {QStringLiteral("describe_layout_tree"),      [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("visibleOnly"), a.value(QStringLiteral("visibleOnly")).toBool(false)}}; }}},
+        {QStringLiteral("qt_describe_subtree"),          {QStringLiteral("describe_subtree"),          [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("layoutTree"), a.value(QStringLiteral("layoutTree")).toBool(false)}, {QStringLiteral("visibleOnly"), a.value(QStringLiteral("visibleOnly")).toBool(false)}}; }}},
+        {QStringLiteral("qt_describe_style"),            {QStringLiteral("describe_style"),            [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("includeChildren"), a.value(QStringLiteral("includeChildren")).toBool(false)}}; }}},
+        {QStringLiteral("qt_focus_window"),              {QStringLiteral("focus_window"),              [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}}; }}},
+        {QStringLiteral("qt_find_widgets"),              {QStringLiteral("find_widgets"),              [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}}; }}},
+        {QStringLiteral("qt_click"),                     {QStringLiteral("click"),                     [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}}; }}},
+        {QStringLiteral("qt_capture_window"),            {QStringLiteral("capture_window"),            [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}}; }}},
+        {QStringLiteral("qt_scroll_into_view"),          {QStringLiteral("scroll_into_view"),          [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}}; }}},
+        {QStringLiteral("qt_set_text"),                  {QStringLiteral("set_text"),                  [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("text"), a.value(QStringLiteral("text")).toString()}}; }}},
+        {QStringLiteral("qt_press_key"),                 {QStringLiteral("press_key"),                 [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("key"), a.value(QStringLiteral("key")).toString()}, {QStringLiteral("modifiers"), a.value(QStringLiteral("modifiers")).toString()}}; }}},
+        {QStringLiteral("qt_send_shortcut"),             {QStringLiteral("send_shortcut"),             [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("shortcut"), a.value(QStringLiteral("shortcut")).toString()}}; }}},
+        {QStringLiteral("qt_scroll"),                    {QStringLiteral("scroll"),                    [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("direction"), a.value(QStringLiteral("direction")).toString()}, {QStringLiteral("amount"), a.value(QStringLiteral("amount")).toInt(120)}}; }}},
+        {QStringLiteral("qt_select_item"),               {QStringLiteral("select_item"),               [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("options"), a.value(QStringLiteral("options")).toObject()}}; }}},
+        {QStringLiteral("qt_toggle_check"),              {QStringLiteral("toggle_check"),              [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("checked"), a.value(QStringLiteral("checked")).toBool()}}; }}},
+        {QStringLiteral("qt_choose_combo_option"),       {QStringLiteral("choose_combo_option"),       [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("text"), a.value(QStringLiteral("text")).toString()}, {QStringLiteral("index"), a.value(QStringLiteral("index")).toInt(-1)}}; }}},
+        {QStringLiteral("qt_activate_tab"),              {QStringLiteral("activate_tab"),              [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("text"), a.value(QStringLiteral("text")).toString()}, {QStringLiteral("index"), a.value(QStringLiteral("index")).toInt(-1)}}; }}},
+        {QStringLiteral("qt_switch_stacked_page"),       {QStringLiteral("switch_stacked_page"),       [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("index"), a.value(QStringLiteral("index")).toInt(-1)}}; }}},
+        {QStringLiteral("qt_expand_tree_node"),          {QStringLiteral("expand_tree_node"),          [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("path"), a.value(QStringLiteral("path")).toArray()}}; }}},
+        {QStringLiteral("qt_collapse_tree_node"),        {QStringLiteral("collapse_tree_node"),        [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("path"), a.value(QStringLiteral("path")).toArray()}}; }}},
+        {QStringLiteral("qt_assert_widget"),             {QStringLiteral("assert_widget"),             [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("assertions"), a.value(QStringLiteral("assertions")).toObject()}}; }}},
+        {QStringLiteral("qt_wait_for_widget"),           {QStringLiteral("wait_for_widget"),           [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("selector"), a.value(QStringLiteral("selector")).toObject()}, {QStringLiteral("assertions"), a.value(QStringLiteral("assertions")).toObject()}, {QStringLiteral("timeoutMs"), a.value(QStringLiteral("timeoutMs")).toInt(3000)}, {QStringLiteral("pollIntervalMs"), a.value(QStringLiteral("pollIntervalMs")).toInt(100)}}; }}},
+        {QStringLiteral("qt_wait_for_log"),              {QStringLiteral("wait_for_log"),              [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("textContains"), a.value(QStringLiteral("textContains")).toString()}, {QStringLiteral("regex"), a.value(QStringLiteral("regex")).toString()}, {QStringLiteral("timeoutMs"), a.value(QStringLiteral("timeoutMs")).toInt(3000)}, {QStringLiteral("pollIntervalMs"), a.value(QStringLiteral("pollIntervalMs")).toInt(100)}, {QStringLiteral("limit"), qMin(a.value(QStringLiteral("limit")).toInt(200), kMaxLogLimit)}}; }}},
+        {QStringLiteral("qt_get_logs"),                  {QStringLiteral("get_logs"),                  [](const QJsonObject &a) { return QJsonObject{{QStringLiteral("limit"), qMin(a.value(QStringLiteral("limit")).toInt(50), kMaxLogLimit)}}; }}},
+    };
 
     QJsonObject callTool(const QString &toolName, const QJsonObject &arguments, const qtautotest::BridgeClient &bridgeClient)
     {
-        const QString bridgeCommand = bridgeCommandForTool(toolName);
-        if (bridgeCommand.isEmpty())
+        const auto it = toolMap.constFind(toolName);
+        if (it == toolMap.constEnd())
         {
             return QJsonObject{
                 {"ok", false},
@@ -808,7 +560,7 @@ namespace
             }
         }
 
-        const QJsonObject bridgeParams = buildBridgeParams(toolName, arguments);
+        const QJsonObject bridgeParams = it.value().buildParams(arguments);
 
         if (bridgeParams.contains(QStringLiteral("selector")))
         {
@@ -826,7 +578,7 @@ namespace
             }
         }
 
-        const qtautotest::BridgeCallResult bridgeResult = bridgeClient.call(bridgeCommand, bridgeParams);
+        const qtautotest::BridgeCallResult bridgeResult = bridgeClient.call(it.value().bridgeCommand, bridgeParams);
         if (!bridgeResult.transportOk)
         {
             return QJsonObject{

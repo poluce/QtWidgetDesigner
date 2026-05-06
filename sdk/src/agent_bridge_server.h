@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
+#include <functional>
 
 class QWebSocket;
 class QWebSocketServer;
@@ -33,6 +34,10 @@ private:
         QHash<QString, qint64> lastSentAtByFingerprint;
     };
 
+    using CommandHandler = std::function<QJsonObject(QWebSocket* socket, const QJsonObject& request, const QJsonValue& id)>;
+
+    void initCommandHandlers();
+
     void handleNewConnection();
     void handleTextMessage(QWebSocket* socket, const QString& message);
     void handleDisconnected(QWebSocket* socket);
@@ -48,10 +53,14 @@ private:
     QJsonObject errorResponse(const QJsonValue& id, const QString& code, const QString& message,
                               const QJsonObject& details = QJsonObject()) const;
 
+    /// 将命令执行结果（含 ok 字段）包装为 success/error response
+    QJsonObject wrapResult(const QJsonValue& id, const QJsonObject& result) const;
+
     QWebSocketServer* m_server = nullptr;
     UiEventMonitor* m_eventMonitor = nullptr;
     QList<QWebSocket*> m_clients;
     QList<EventSubscription> m_subscriptions;
     QHash<QWebSocket*, quint64> m_nextSequenceBySocket;
+    QHash<QString, CommandHandler> m_commandHandlers;
     quint64 m_nextSubscriptionId = 1;
 };
