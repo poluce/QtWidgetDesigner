@@ -1,12 +1,14 @@
 #include <qtautotest/action_observer.h>
 
+#include <atomic>
+
 namespace qtautotest {
 
 namespace {
 
-ActionObserver*& observerSlot()
+std::atomic<ActionObserver*>& observerSlot()
 {
-    static ActionObserver* observer = nullptr;
+    static std::atomic<ActionObserver*> observer = nullptr;
     return observer;
 }
 
@@ -14,12 +16,12 @@ ActionObserver*& observerSlot()
 
 void setActionObserver(ActionObserver* observer)
 {
-    observerSlot() = observer;
+    observerSlot().store(observer, std::memory_order_release);
 }
 
 ActionObserver* actionObserver()
 {
-    return observerSlot();
+    return observerSlot().load(std::memory_order_acquire);
 }
 
 } // namespace qtautotest

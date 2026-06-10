@@ -20,6 +20,7 @@ struct HarnessOptions
 
 class ProcessHarness
 {
+    Q_DISABLE_COPY_MOVE(ProcessHarness)
 public:
     ProcessHarness();
     ~ProcessHarness();

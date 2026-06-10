@@ -13,7 +13,7 @@ namespace qtautotest {
 class BridgeStreamClient::Impl
 {
 public:
-    QWebSocket socket;
+    QWebSocket* socket = nullptr;
     QString error;
 };
 
@@ -23,36 +23,36 @@ BridgeStreamClient::BridgeStreamClient(QObject* parent)
 {
     qRegisterMetaType<qtautotest::BridgeEvent>("qtautotest::BridgeEvent");
 
-    // 指向值成员，基类通过 m_socket 操作
-    m_socket = &m_impl->socket;
+    m_impl->socket = new QWebSocket();
+    m_socket = m_impl->socket;
 
     // 持久化信号连接
-    QObject::connect(&m_impl->socket, &QWebSocket::connected, this, [this]() {
+    QObject::connect(m_impl->socket, &QWebSocket::connected, this, [this]() {
         m_impl->error.clear();
         emit connected();
     });
 
-    QObject::connect(&m_impl->socket, &QWebSocket::disconnected, this, [this]() {
+    QObject::connect(m_impl->socket, &QWebSocket::disconnected, this, [this]() {
         emit disconnected();
     });
 
-    QObject::connect(&m_impl->socket, &QWebSocket::textMessageReceived, this,
+    QObject::connect(m_impl->socket, &QWebSocket::textMessageReceived, this,
                      [this](const QString& message) {
                          // 基类负责解析 JSON + 路由
                          AbstractBridgeClient::onTextMessageReceived(message);
                      });
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    QObject::connect(&m_impl->socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        m_impl->error = m_impl->socket.errorString();
+    QObject::connect(m_impl->socket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+        m_impl->error = m_impl->socket->errorString();
         emit transportError(m_impl->error);
     });
 #else
-    QObject::connect(&m_impl->socket,
+    QObject::connect(m_impl->socket,
                      QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
                      this,
                      [this](QAbstractSocket::SocketError) {
-                         m_impl->error = m_impl->socket.errorString();
+                         m_impl->error = m_impl->socket->errorString();
                          emit transportError(m_impl->error);
                      });
 #endif
@@ -66,13 +66,17 @@ BridgeStreamClient::BridgeStreamClient(QUrl bridgeUrl, QObject* parent)
 
 BridgeStreamClient::~BridgeStreamClient()
 {
-    // m_socket 指向 m_impl->socket（值成员），基类 disconnectFromBridge 会 deleteLater
-    // 所以先断开 + 置空指针，让基类析构时跳过
-    if (m_impl->socket.state() != QAbstractSocket::UnconnectedState) {
-        m_impl->socket.close();
+    // 手动清理 socket，不让基类 disconnectFromBridge() 执行 deleteLater
+    // （基类析构时 m_socket == nullptr 会安全跳过）
+    if (m_impl->socket != nullptr) {
+        if (m_impl->socket->state() != QAbstractSocket::UnconnectedState) {
+            m_impl->socket->close();
+        }
+        delete m_impl->socket;
+        m_impl->socket = nullptr;
     }
-    m_pendingResponses.clear();
     m_socket = nullptr;
+    m_pendingResponses.clear();
     delete m_impl;
 }
 
@@ -95,8 +99,8 @@ bool BridgeStreamClient::ensureConnected(int timeoutMs)
     m_impl->error.clear();
     m_pendingResponses.clear();
 
-    if (m_impl->socket.state() != QAbstractSocket::UnconnectedState) {
-        m_impl->socket.abort();
+    if (m_impl->socket->state() != QAbstractSocket::UnconnectedState) {
+        m_impl->socket->abort();
     }
 
     QEventLoop loop;
@@ -106,11 +110,11 @@ bool BridgeStreamClient::ensureConnected(int timeoutMs)
 
     QObject::connect(&timer, &QTimer::timeout, &loop, [&]() {
         m_impl->error = QStringLiteral("Timed out connecting to bridge.");
-        m_impl->socket.abort();
+        m_impl->socket->abort();
         loop.quit();
     });
 
-    QObject::connect(&m_impl->socket, &QWebSocket::connected, &loop, [&]() {
+    QObject::connect(m_impl->socket, &QWebSocket::connected, &loop, [&]() {
         connectedOk = true;
         loop.quit();
     });
@@ -122,7 +126,7 @@ bool BridgeStreamClient::ensureConnected(int timeoutMs)
     });
 
     timer.start(timeoutMs > 0 ? timeoutMs : 5000);
-    m_impl->socket.open(m_bridgeUrl);
+    m_impl->socket->open(m_bridgeUrl);
     loop.exec();
 
     return connectedOk;

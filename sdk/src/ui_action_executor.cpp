@@ -206,11 +206,10 @@ QJsonObject click(const QJsonObject& selector)
     QPointer<QWidget> safeWidget(widget);
 
     const QPoint clickPoint = widget->rect().center();
-    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
-        observer->prepareForClick(widget, clickPoint);
-    }
+    qtautotest::ActionObserver* const observer = currentActionObserver();
 
-    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+    if (observer != nullptr) {
+        observer->prepareForClick(widget, clickPoint);
         QTest::mouseMove(widget, clickPoint);
         QTest::mousePress(widget, Qt::LeftButton, Qt::NoModifier, clickPoint);
         observer->showClickPulse(widget, clickPoint);
@@ -254,47 +253,47 @@ QJsonObject setText(const QJsonObject& selector, const QString& text)
         return errorObject(QStringLiteral("not_editable"), errorMessage);
     }
 
+    qtautotest::ActionObserver* const observer = currentActionObserver();
+    const int keyDelay = observer != nullptr ? observer->keyDelayMs() : 0;
+
     if (auto* lineEdit = qobject_cast<QLineEdit*>(widget)) {
         if (lineEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Line edit is read-only."));
         }
-        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+        if (observer != nullptr) {
             observer->prepareForTyping(widget);
         }
         lineEdit->setFocus();
         lineEdit->selectAll();
         QTest::keyClick(lineEdit, Qt::Key_Backspace);
-        QTest::keyClicks(lineEdit, text, Qt::NoModifier,
-                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
+        QTest::keyClicks(lineEdit, text, Qt::NoModifier, keyDelay);
     } else if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(widget)) {
         if (plainTextEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Plain text edit is read-only."));
         }
-        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+        if (observer != nullptr) {
             observer->prepareForTyping(widget);
         }
         plainTextEdit->setFocus();
         plainTextEdit->selectAll();
         QTest::keyClick(plainTextEdit, Qt::Key_Backspace);
-        QTest::keyClicks(plainTextEdit, text, Qt::NoModifier,
-                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
+        QTest::keyClicks(plainTextEdit, text, Qt::NoModifier, keyDelay);
     } else if (auto* textEdit = qobject_cast<QTextEdit*>(widget)) {
         if (textEdit->isReadOnly()) {
             return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Text edit is read-only."));
         }
-        if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+        if (observer != nullptr) {
             observer->prepareForTyping(widget);
         }
         textEdit->setFocus();
         textEdit->selectAll();
         textEdit->textCursor().removeSelectedText();
-        QTest::keyClicks(textEdit, text, Qt::NoModifier,
-                         currentActionObserver() != nullptr ? currentActionObserver()->keyDelayMs() : 0);
+        QTest::keyClicks(textEdit, text, Qt::NoModifier, keyDelay);
     } else {
         return errorObject(QStringLiteral("unsupported_widget"), QStringLiteral("Widget does not support set_text."));
     }
 
-    if (qtautotest::ActionObserver* observer = currentActionObserver()) {
+    if (observer != nullptr) {
         observer->finishAction();
     } else {
         QTest::qWait(30);
@@ -325,8 +324,14 @@ QJsonObject captureWindow(const QJsonObject& selector)
 
     QByteArray pngBytes;
     QBuffer buffer(&pngBytes);
-    buffer.open(QIODevice::WriteOnly);
-    pixmap.save(&buffer, "PNG");
+    if (!buffer.open(QIODevice::WriteOnly)) {
+        return errorObject(QStringLiteral("capture_failed"),
+                           QStringLiteral("Failed to open output buffer for window capture."));
+    }
+    if (!pixmap.save(&buffer, "PNG")) {
+        return errorObject(QStringLiteral("capture_failed"),
+                           QStringLiteral("Failed to encode window capture as PNG."));
+    }
 
     return QJsonObject{
         {"ok", true},
@@ -446,10 +451,10 @@ QJsonObject scroll(const QJsonObject& selector, const QString& direction, int am
         return errorObject(QStringLiteral("not_scrollable"), QStringLiteral("Scroll bar is not available."));
     }
 
-    const int safeAmount = amount == 0 ? 120 : amount;
-    int delta = safeAmount;
+    const int absAmount = qAbs(amount == 0 ? 120 : amount);
+    int delta = absAmount;
     if (direction == QStringLiteral("up") || direction == QStringLiteral("left")) {
-        delta = -safeAmount;
+        delta = -absAmount;
     }
     bar->setValue(bar->value() + delta);
     QTest::qWait(30);

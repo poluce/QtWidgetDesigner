@@ -33,6 +33,8 @@
 MainWindow::MainWindow(quint16 bridgePort, QWidget* parent)
     : QMainWindow(parent)
     , m_bridgePort(bridgePort)
+    , m_automationClient(std::make_unique<qtautotest::AutomationClient>(
+          QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(bridgePort))))
 {
     buildUi();
     wireSignals();
@@ -459,10 +461,9 @@ void MainWindow::appendUiLog(const QString& line)
 
 void MainWindow::refreshBridgeLog()
 {
-    qtautotest::AutomationClient client(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(m_bridgePort)));
     qtautotest::LogQuery query;
     query.limit = 60;
-    const qtautotest::Result<QVector<qtautotest::LogEntry>> logResult = client.getLogs(query);
+    const qtautotest::Result<QVector<qtautotest::LogEntry>> logResult = m_automationClient->getLogs(query);
 
     if (!logResult) {
         return;

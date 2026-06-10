@@ -1691,7 +1691,7 @@ namespace WidgetIntrospection
         return layoutSummaryImpl(widget);
     }
 
-    QString refForWidget(const QWidget *widget)
+    QString refForWidget(QWidget *widget)
     {
         refreshRegistry();
         return ensureRef(widget);

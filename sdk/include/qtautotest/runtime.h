@@ -12,6 +12,7 @@ struct RuntimeOptions
 
 class Runtime
 {
+    Q_DISABLE_COPY_MOVE(Runtime)
 public:
     Runtime();
     ~Runtime();

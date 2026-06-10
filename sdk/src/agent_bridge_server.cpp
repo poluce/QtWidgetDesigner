@@ -18,20 +18,22 @@
 namespace
 {
 
-    QStringList supportedEventTypes()
+    const QStringList& supportedEventTypes()
     {
-        return QStringList{
+        static const QStringList kTypes{
             QStringLiteral("tab_changed"),
             QStringLiteral("active_page_changed"),
             QStringLiteral("window_focus_changed"),
             QStringLiteral("focus_widget_changed"),
             QStringLiteral("modal_dialog_changed"),
         };
+        return kTypes;
     }
 
-    QJsonArray supportedEventTypesJson()
+    const QJsonArray& supportedEventTypesJson()
     {
-        return QJsonArray::fromStringList(supportedEventTypes());
+        static const QJsonArray kJson = QJsonArray::fromStringList(supportedEventTypes());
+        return kJson;
     }
 
     QString payloadFingerprint(const QString &eventName, const QJsonObject &payload)

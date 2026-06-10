@@ -25,7 +25,7 @@ QWidget* chooseWindowTarget(const QJsonObject& selector, QString* errorMessage);
 QJsonObject widgetSummary(const QWidget* widget);
 QJsonObject styleSummary(const QWidget* widget);
 QJsonObject layoutSummary(const QWidget* widget);
-QString refForWidget(const QWidget* widget);
+QString refForWidget(QWidget* widget);
 QWidget* widgetForRef(const QString& ref);
 QWidget* activePageWidget();
 bool isOnCurrentPage(const QWidget* widget);

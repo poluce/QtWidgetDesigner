@@ -107,6 +107,7 @@ struct ModalDialogChangedEvent
 
 class AutomationEventClient
 {
+    Q_DISABLE_COPY_MOVE(AutomationEventClient)
 public:
     AutomationEventClient();
     explicit AutomationEventClient(QUrl bridgeUrl);

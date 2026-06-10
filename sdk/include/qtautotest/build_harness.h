@@ -35,6 +35,7 @@ struct BuildHarnessOptions
 
 class BuildHarness
 {
+    Q_DISABLE_COPY_MOVE(BuildHarness)
 public:
     BuildHarness();
     ~BuildHarness();

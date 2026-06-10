@@ -414,56 +414,59 @@ class BridgeClient;
 
 class AutomationClient
 {
+    Q_DISABLE_COPY(AutomationClient)
 public:
     explicit AutomationClient(QUrl bridgeUrl = QUrl(QStringLiteral("ws://127.0.0.1:49555")));
+    AutomationClient(AutomationClient&& other) noexcept;
+    AutomationClient& operator=(AutomationClient&& other) noexcept;
     ~AutomationClient();
 
     const QUrl& bridgeUrl() const;
     void setBridgeUrl(QUrl bridgeUrl);
 
-    OperationResult ping() const;
-    Result<QVector<CommandKind>> supportedCommands() const;
-    Result<QVector<EventKind>> supportedEvents() const;
+    OperationResult ping();
+    Result<QVector<CommandKind>> supportedCommands();
+    Result<QVector<EventKind>> supportedEvents();
 
-    Result<SnapshotView> describeUi() const;
-    Result<SnapshotView> describeSnapshot() const;
-    Result<ObjectTreeView> describeObjectTree(const TreeOptions& options = TreeOptions{}) const;
-    Result<LayoutTreeView> describeLayoutTree(const TreeOptions& options = TreeOptions{}) const;
-    Result<SubtreeView> describeSubtree(const Selector& selector, const SubtreeOptions& options = SubtreeOptions{}) const;
-    Result<StyleTreeView> describeStyle(const Selector& selector, const StyleOptions& options = StyleOptions{}) const;
-    Result<ActivePageView> describeActivePage() const;
-    Result<QVector<WindowInfo>> listWindows() const;
-    Result<QVector<SnapshotNode>> findWidgets(const Selector& selector) const;
-    Result<QVector<LogEntry>> getLogs(const LogQuery& query = LogQuery{}) const;
-    Result<WindowCapture> captureWindow(const Selector& selector = Selector{}) const;
+    Result<SnapshotView> describeUi();
+    Result<SnapshotView> describeSnapshot();
+    Result<ObjectTreeView> describeObjectTree(const TreeOptions& options = TreeOptions{});
+    Result<LayoutTreeView> describeLayoutTree(const TreeOptions& options = TreeOptions{});
+    Result<SubtreeView> describeSubtree(const Selector& selector, const SubtreeOptions& options = SubtreeOptions{});
+    Result<StyleTreeView> describeStyle(const Selector& selector, const StyleOptions& options = StyleOptions{});
+    Result<ActivePageView> describeActivePage();
+    Result<QVector<WindowInfo>> listWindows();
+    Result<QVector<SnapshotNode>> findWidgets(const Selector& selector);
+    Result<QVector<LogEntry>> getLogs(const LogQuery& query = LogQuery{});
+    Result<WindowCapture> captureWindow(const Selector& selector = Selector{});
 
-    Result<SnapshotNode> focusWindow(const Selector& selector = Selector{}) const;
-    Result<ActionResult> click(const Selector& selector) const;
-    Result<ActionResult> setText(const Selector& selector, const QString& text) const;
-    Result<ActionResult> pressKey(const Selector& selector, const KeyPress& keyPress) const;
-    Result<ActionResult> sendShortcut(const Selector& selector, const QKeySequence& shortcut) const;
-    Result<ActionResult> scroll(const ScrollRequest& request) const;
-    Result<ActionResult> scrollIntoView(const Selector& selector) const;
-    Result<ActionResult> selectListItem(const Selector& selector, const ListItemTarget& target) const;
-    Result<ActionResult> selectTreeItem(const Selector& selector, const TreeItemTarget& target) const;
-    Result<ActionResult> selectTableCell(const Selector& selector, int row, int column) const;
-    Result<ActionResult> setChecked(const Selector& selector, bool checked) const;
-    Result<ActionResult> chooseComboOption(const Selector& selector, const ChoiceTarget& target) const;
-    Result<ActionResult> activateTab(const Selector& selector, const ChoiceTarget& target) const;
-    Result<ActionResult> switchStackedPage(const Selector& selector, int index) const;
-    Result<ActionResult> expandTreeNode(const Selector& selector, const QStringList& path) const;
-    Result<ActionResult> collapseTreeNode(const Selector& selector, const QStringList& path) const;
+    Result<SnapshotNode> focusWindow(const Selector& selector = Selector{});
+    Result<ActionResult> click(const Selector& selector);
+    Result<ActionResult> setText(const Selector& selector, const QString& text);
+    Result<ActionResult> pressKey(const Selector& selector, const KeyPress& keyPress);
+    Result<ActionResult> sendShortcut(const Selector& selector, const QKeySequence& shortcut);
+    Result<ActionResult> scroll(const ScrollRequest& request);
+    Result<ActionResult> scrollIntoView(const Selector& selector);
+    Result<ActionResult> selectListItem(const Selector& selector, const ListItemTarget& target);
+    Result<ActionResult> selectTreeItem(const Selector& selector, const TreeItemTarget& target);
+    Result<ActionResult> selectTableCell(const Selector& selector, int row, int column);
+    Result<ActionResult> setChecked(const Selector& selector, bool checked);
+    Result<ActionResult> chooseComboOption(const Selector& selector, const ChoiceTarget& target);
+    Result<ActionResult> activateTab(const Selector& selector, const ChoiceTarget& target);
+    Result<ActionResult> switchStackedPage(const Selector& selector, int index);
+    Result<ActionResult> expandTreeNode(const Selector& selector, const QStringList& path);
+    Result<ActionResult> collapseTreeNode(const Selector& selector, const QStringList& path);
 
-    Result<WidgetCheckResult> assertWidget(const Selector& selector, const WidgetAssertions& assertions = WidgetAssertions{}) const;
+    Result<WidgetCheckResult> assertWidget(const Selector& selector, const WidgetAssertions& assertions = WidgetAssertions{});
     Result<WidgetCheckResult> waitForWidget(const Selector& selector, const WidgetAssertions& assertions,
-                                            const WaitOptions& options = WaitOptions{}) const;
-    Result<LogMatchResult> waitForLog(const LogQuery& query, const WaitOptions& options = WaitOptions{}) const;
+                                            const WaitOptions& options = WaitOptions{});
+    Result<LogMatchResult> waitForLog(const LogQuery& query, const WaitOptions& options = WaitOptions{});
 
 private:
-    BridgeClient& client() const;
+    BridgeClient& client();
 
     QUrl m_bridgeUrl;
-    mutable BridgeClient* m_client = nullptr;
+    BridgeClient* m_client = nullptr;
 };
 
 } // namespace qtautotest

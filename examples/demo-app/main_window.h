@@ -2,6 +2,8 @@
 
 #include <QMainWindow>
 
+#include <memory>
+
 class QCheckBox;
 class QComboBox;
 class QDialog;
@@ -19,6 +21,10 @@ class QTabWidget;
 class QTableWidget;
 class QTimer;
 class QTreeWidget;
+
+namespace qtautotest {
+class AutomationClient;
+} // namespace qtautotest
 
 class MainWindow : public QMainWindow
 {
@@ -39,6 +45,7 @@ private:
     quint16 m_bridgePort = 0;
     int m_counter = 0;
     QString m_lastBridgeLogSnapshot;
+    std::unique_ptr<qtautotest::AutomationClient> m_automationClient;
 
     QLabel* m_statusLabel = nullptr;
     QLabel* m_counterLabel = nullptr;
