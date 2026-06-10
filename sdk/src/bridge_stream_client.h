@@ -26,6 +26,7 @@ struct BridgeEvent
 class BridgeStreamClient : public AbstractBridgeClient
 {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(BridgeStreamClient)
 
 public:
     explicit BridgeStreamClient(QObject* parent = nullptr);
@@ -35,6 +36,9 @@ public:
     bool connectToBridge(int timeoutMs = 5000);
 
     QString errorString() const;
+
+    /// 覆写：同步清理 m_impl->socket，防止基类 deleteLater 后悬挂指针
+    void disconnectFromBridge() override;
 
     BridgeCallResult subscribe(const QStringList& events, const QJsonArray& selectors = QJsonArray(),
                                int debounceMs = 50, int timeoutMs = 5000);

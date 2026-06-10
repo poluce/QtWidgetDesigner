@@ -27,6 +27,7 @@ struct BridgeCallResult
 class AbstractBridgeClient : public QObject
 {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(AbstractBridgeClient)
 
 public:
     explicit AbstractBridgeClient(QObject* parent = nullptr);
@@ -39,7 +40,7 @@ public:
     bool isConnected() const;
 
     /// 断开连接并清理待响应队列。
-    void disconnectFromBridge();
+    virtual void disconnectFromBridge();
 
     /// 同步调用桥接命令。
     /// 内部会先调用子类的 ensureConnected() 确保连接可用。
@@ -69,7 +70,7 @@ protected:
     QHash<QString, QJsonObject> m_pendingResponses;
     QString m_lastError;
     QUrl m_bridgeUrl;
-    bool m_connecting = false;
+    bool m_destructing = false;
 };
 
 } // namespace qtautotest

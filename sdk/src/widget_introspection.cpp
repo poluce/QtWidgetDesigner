@@ -59,7 +59,7 @@ namespace
     // 清理 QPointer 已失效但条目还残留的脏数据，防止地址复用导致 ref 冲突
     void cleanupStaleEntries(RefRegistry &r)
     {
-        QList<QString> staleRefs;
+        QStringList staleRefs;
         for (auto it = r.widgetByRef.constBegin(); it != r.widgetByRef.constEnd(); ++it)
         {
             if (it.value().isNull())
@@ -96,10 +96,13 @@ namespace
 
         const QString ref = QStringLiteral("w%1").arg(r.nextId++);
         r.refByPtr.insert(key, ref);
+        // const_cast 安全：widgetByRef 仅做索引查找，不修改 widget 内容
         r.widgetByRef.insert(ref, const_cast<QWidget *>(widget));
 
         // 监听 widget 销毁事件，自动清理 registry 中的索引
-        QObject::connect(const_cast<QWidget *>(widget), &QObject::destroyed, &r,
+        // const_cast 安全：connect 仅连接 destroyed 信号，不修改 widget 状态
+        // 使用 3 参数重载（RefRegistry 不是 QObject，不能作为 context 参数）
+        QObject::connect(const_cast<QWidget *>(widget), &QObject::destroyed,
                          [&r, key, ref](QObject *)
                          {
                              QMutexLocker cleanupLocker(&r.mutex);
@@ -133,7 +136,8 @@ namespace
                 r.widgetByRef.insert(ref, const_cast<QWidget *>(widget));
 
                 // 监听 widget 销毁事件
-                QObject::connect(widget, &QObject::destroyed, &r,
+                // 使用 3 参数重载（RefRegistry 不是 QObject）
+                QObject::connect(widget, &QObject::destroyed,
                                  [&r, key, ref](QObject *)
                                  {
                                      QMutexLocker cleanupLocker(&r.mutex);
@@ -308,9 +312,12 @@ namespace
             return QStringLiteral("PlaceholderText");
 #endif
         case QPalette::NoRole:
-        default:
             return QStringLiteral("NoRole");
+        case QPalette::NColorRoles:
+            break;
         }
+        Q_UNREACHABLE();
+        return QStringLiteral("NoRole");
     }
 
     QString colorGroupName(QPalette::ColorGroup group)
@@ -324,9 +331,13 @@ namespace
         case QPalette::Disabled:
             return QStringLiteral("disabled");
         case QPalette::Current:
-        default:
             return QStringLiteral("current");
+        case QPalette::All:
+        case QPalette::NColorGroups:
+            break;
         }
+        Q_UNREACHABLE();
+        return QStringLiteral("current");
     }
 
     QJsonObject colorToJson(const QColor &color)
@@ -1583,7 +1594,6 @@ namespace WidgetIntrospection
 
     QJsonArray findWidgets(const QJsonObject &selector)
     {
-        refreshRegistry();
 
         QJsonArray result;
         const QList<QWidget *> widgets = candidateWidgets();
@@ -1600,7 +1610,6 @@ namespace WidgetIntrospection
 
     QWidget *findSingleWidget(const QJsonObject &selector, QString *errorMessage, QJsonArray *candidates)
     {
-        refreshRegistry();
 
         QList<QWidget *> matches;
         const QList<QWidget *> widgets = candidateWidgets();

@@ -275,7 +275,7 @@ Result<QVector<LogEntry>> AutomationClient::getLogs(const LogQuery& query)
             filtered.append(entry);
         }
     }
-    result.value = filtered;
+    result.value = std::move(filtered);
     return result;
 }
 

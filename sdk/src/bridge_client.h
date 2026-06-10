@@ -13,6 +13,7 @@ namespace qtautotest {
 class BridgeClient : public AbstractBridgeClient
 {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(BridgeClient)
 
 public:
     explicit BridgeClient(QUrl bridgeUrl = QUrl(QStringLiteral("ws://127.0.0.1:49555")), QObject* parent = nullptr);

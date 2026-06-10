@@ -10,7 +10,7 @@
 
 namespace qtautotest {
 
-enum class ErrorCode
+enum class ErrorCode : int
 {
     None,
     Transport,
@@ -44,7 +44,7 @@ enum class ErrorCode
 
 QString toString(ErrorCode code);
 
-enum class CommandKind
+enum class CommandKind : int
 {
     Unknown,
     Ping,
@@ -84,7 +84,7 @@ enum class CommandKind
 
 QString toString(CommandKind command);
 
-enum class EventKind
+enum class EventKind : int
 {
     Unknown,
     TabChanged,
@@ -96,7 +96,7 @@ enum class EventKind
 
 QString toString(EventKind event);
 
-enum class ScrollDirection
+enum class ScrollDirection : int
 {
     Up,
     Down,
@@ -104,7 +104,7 @@ enum class ScrollDirection
     Right,
 };
 
-enum class LogMatchMode
+enum class LogMatchMode : int
 {
     TextContains,
     Regex,
@@ -290,7 +290,7 @@ struct WidgetCheckResult
 
     bool isValid() const
     {
-        return widget.isValid() || !checks.isEmpty() || elapsedMs >= 0;
+        return widget.isValid() || !checks.isEmpty();
     }
 };
 

@@ -66,8 +66,8 @@ BridgeStreamClient::BridgeStreamClient(QUrl bridgeUrl, QObject* parent)
 
 BridgeStreamClient::~BridgeStreamClient()
 {
-    // 手动清理 socket，不让基类 disconnectFromBridge() 执行 deleteLater
-    // （基类析构时 m_socket == nullptr 会安全跳过）
+    // 手动清理 socket，基类析构时 m_socket == nullptr 会安全跳过
+    // （基类析构已处理 m_destructing 路径，此处手动 delete 后置空即可）
     if (m_impl->socket != nullptr) {
         if (m_impl->socket->state() != QAbstractSocket::UnconnectedState) {
             m_impl->socket->close();
@@ -83,6 +83,13 @@ BridgeStreamClient::~BridgeStreamClient()
 bool BridgeStreamClient::connectToBridge(int timeoutMs)
 {
     return ensureConnected(timeoutMs);
+}
+
+void BridgeStreamClient::disconnectFromBridge()
+{
+    AbstractBridgeClient::disconnectFromBridge();
+    // 基类已清理 m_socket 并置空，同步清理 m_impl->socket 防止悬挂
+    m_impl->socket = nullptr;
 }
 
 QString BridgeStreamClient::errorString() const

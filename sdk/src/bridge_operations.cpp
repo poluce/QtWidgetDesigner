@@ -325,11 +325,15 @@ QJsonObject waitForLog(const QString& textContains, const QString& regex,
                            QStringLiteral("wait_for_log requires textContains or regex."));
     }
 
-    const QRegularExpression expression(regex);
-    if (!regex.isEmpty() && !expression.isValid()) {
-        return errorObject(QStringLiteral("invalid_regex"),
-                           QStringLiteral("Invalid regular expression."),
-                           QJsonObject{{"regexError", expression.errorString()}});
+    // 仅当 regex 非空时才编译正则表达式
+    QRegularExpression expression;
+    if (!regex.isEmpty()) {
+        expression = QRegularExpression(regex);
+        if (!expression.isValid()) {
+            return errorObject(QStringLiteral("invalid_regex"),
+                               QStringLiteral("Invalid regular expression."),
+                               QJsonObject{{"regexError", expression.errorString()}});
+        }
     }
 
     const int safeTimeoutMs = timeoutMs > 0 ? timeoutMs : 3000;

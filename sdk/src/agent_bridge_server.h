@@ -14,6 +14,7 @@ class UiEventMonitor;
 class AgentBridgeServer : public QObject
 {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(AgentBridgeServer)
 
 public:
     explicit AgentBridgeServer(QObject* parent = nullptr);

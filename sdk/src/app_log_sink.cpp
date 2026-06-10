@@ -40,7 +40,6 @@ QJsonArray AppLogSink::recentEntries(int limit) const
     const int skip = qMax(0, available - safeLimit);
     int idx = (m_head + skip) % kCapacity;
 
-    result.reserve(safeLimit);
     for (int i = 0; i < safeLimit; ++i) {
         const LogEntry& entry = m_entries[idx];
         result.append(QJsonObject{
@@ -101,5 +100,6 @@ QString AppLogSink::levelForType(QtMsgType type)
         return QStringLiteral("致命");
     }
 
+    Q_UNREACHABLE();
     return QStringLiteral("未知");
 }

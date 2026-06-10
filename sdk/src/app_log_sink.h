@@ -8,6 +8,7 @@
 
 class AppLogSink
 {
+    Q_DISABLE_COPY_MOVE(AppLogSink)
 public:
     static AppLogSink& instance();
 

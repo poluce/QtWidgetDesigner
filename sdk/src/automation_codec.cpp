@@ -334,6 +334,7 @@ QString encodeScrollDirection(ScrollDirection direction)
     case ScrollDirection::Right: return QStringLiteral("right");
     }
 
+    Q_UNREACHABLE();
     return QStringLiteral("down");
 }
 
@@ -676,7 +677,9 @@ WindowCapture parseWindowCapture(const QJsonObject& object)
     WindowCapture capture;
     capture.window = parseSnapshotNode(object.value(QStringLiteral("window")).toObject());
     const QByteArray bytes = QByteArray::fromBase64(object.value(QStringLiteral("imageBase64")).toString().toLatin1());
-    capture.image.loadFromData(bytes, "PNG");
+    if (!capture.image.loadFromData(bytes, "PNG")) {
+        qWarning("parseWindowCapture: failed to decode PNG image from Base64 data");
+    }
     return capture;
 }
 

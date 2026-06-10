@@ -29,6 +29,11 @@
 #include <QTreeWidgetItemIterator>
 #include <QWidget>
 
+// 窗口激活后等待事件循环处理的延迟（毫秒）
+constexpr int kWindowActivationDelayMs = 50;
+// UI 动作执行后等待事件传播的延迟（毫秒）
+constexpr int kPostActionDelayMs = 30;
+
 namespace {
 
 QJsonObject errorObject(const QString& code, const QString& message, const QJsonArray& candidates = QJsonArray())
@@ -73,7 +78,7 @@ bool prepareWidget(QWidget* widget, QString* errorMessage)
     window->show();
     window->raise();
     window->activateWindow();
-    QTest::qWait(50);
+    QTest::qWait(kWindowActivationDelayMs);
 
     return true;
 }
@@ -219,7 +224,7 @@ QJsonObject click(const QJsonObject& selector)
     } else {
         QTest::mouseMove(widget, clickPoint);
         QTest::mouseClick(widget, Qt::LeftButton, Qt::NoModifier, clickPoint);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
     }
 
     QJsonObject result{
@@ -296,7 +301,7 @@ QJsonObject setText(const QJsonObject& selector, const QString& text)
     if (observer != nullptr) {
         observer->finishAction();
     } else {
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
     }
 
     return QJsonObject{
@@ -317,7 +322,7 @@ QJsonObject captureWindow(const QJsonObject& selector)
     window->show();
     window->raise();
     window->activateWindow();
-    QTest::qWait(50);
+    QTest::qWait(kWindowActivationDelayMs);
 
     QPixmap pixmap(window->size());
     window->render(&pixmap);
@@ -352,7 +357,7 @@ QJsonObject focusWindow(const QJsonObject& selector)
     window->raise();
     window->activateWindow();
     window->setFocus();
-    QTest::qWait(50);
+    QTest::qWait(kWindowActivationDelayMs);
 
     return QJsonObject{
         {"ok", true},
@@ -382,7 +387,7 @@ QJsonObject pressKey(const QJsonObject& selector, const QString& key, const QStr
 
     widget->setFocus();
     QTest::keyClick(widget, qtKey, parseModifiers(modifiers));
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
 
     return QJsonObject{
         {"ok", true},
@@ -413,7 +418,7 @@ QJsonObject sendShortcut(const QJsonObject& selector, const QString& shortcut)
 
     widget->setFocus();
     QTest::keySequence(widget, sequence);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
 
     return QJsonObject{
         {"ok", true},
@@ -451,13 +456,17 @@ QJsonObject scroll(const QJsonObject& selector, const QString& direction, int am
         return errorObject(QStringLiteral("not_scrollable"), QStringLiteral("Scroll bar is not available."));
     }
 
+    if (amount < 0) {
+        return errorObject(QStringLiteral("invalid_amount"),
+                           QStringLiteral("Scroll amount must be non-negative."));
+    }
     const int absAmount = qAbs(amount == 0 ? 120 : amount);
     int delta = absAmount;
     if (direction == QStringLiteral("up") || direction == QStringLiteral("left")) {
         delta = -absAmount;
     }
     bar->setValue(bar->value() + delta);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
 
     return QJsonObject{
         {"ok", true},
@@ -480,7 +489,7 @@ QJsonObject scrollIntoView(const QJsonObject& selector)
     QWidget* scrollTarget = WidgetIntrospection::scrollContainerForWidget(widget);
     if (auto* scrollArea = qobject_cast<QScrollArea*>(scrollTarget)) {
         scrollArea->ensureWidgetVisible(widget, 24, 24);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{
             {"ok", true},
             {"widget", WidgetIntrospection::widgetSummary(widget)},
@@ -516,7 +525,7 @@ QJsonObject selectItem(const QJsonObject& selector, const QJsonObject& options)
             return errorObject(QStringLiteral("not_selectable"), QStringLiteral("List item was not found."));
         }
         listWidget->setCurrentItem(item);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{{"ok", true}, {"selectedText", item->text()}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
     }
 
@@ -533,7 +542,7 @@ QJsonObject selectItem(const QJsonObject& selector, const QJsonObject& options)
             return errorObject(QStringLiteral("not_selectable"), QStringLiteral("Tree item was not found."));
         }
         treeWidget->setCurrentItem(item);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{{"ok", true}, {"selectedText", item->text(0)}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
     }
 
@@ -545,7 +554,7 @@ QJsonObject selectItem(const QJsonObject& selector, const QJsonObject& options)
         }
         tableWidget->setCurrentCell(row, column);
         const QString text = tableWidget->item(row, column) != nullptr ? tableWidget->item(row, column)->text() : QString();
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{{"ok", true}, {"selectedText", text}, {"row", row}, {"column", column}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
     }
 
@@ -554,6 +563,13 @@ QJsonObject selectItem(const QJsonObject& selector, const QJsonObject& options)
 
 QJsonObject toggleCheck(const QJsonObject& selector, bool checked)
 {
+    // re-entrancy guard: click() may trigger signals that re-enter this function
+    static bool s_inProgress = false;
+    if (s_inProgress) {
+        return errorObject(QStringLiteral("internal_error"),
+                           QStringLiteral("toggleCheck is not re-entrant."));
+    }
+
     QString errorMessage;
     QJsonArray candidates;
     QWidget* widget = resolveWidget(selector, &errorMessage, &candidates);
@@ -568,7 +584,9 @@ QJsonObject toggleCheck(const QJsonObject& selector, bool checked)
     }
 
     if (button->isChecked() != checked) {
+        s_inProgress = true;
         const QJsonObject clickResult = click(selector);
+        s_inProgress = false;
         if (!clickResult.value(QStringLiteral("ok")).toBool()) {
             return clickResult;
         }
@@ -601,7 +619,7 @@ QJsonObject chooseComboOption(const QJsonObject& selector, const QString& text, 
     }
 
     comboBox->setCurrentIndex(targetIndex);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
 
     return QJsonObject{{"ok", true}, {"index", targetIndex}, {"text", comboBox->currentText()}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
 }
@@ -631,7 +649,7 @@ QJsonObject activateTab(const QJsonObject& selector, const QString& tabText, int
             return errorObject(QStringLiteral("not_selectable"), QStringLiteral("Tab was not found."));
         }
         tabWidget->setCurrentIndex(targetIndex);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{{"ok", true}, {"index", targetIndex}, {"text", tabWidget->tabText(targetIndex)}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
     }
 
@@ -648,7 +666,7 @@ QJsonObject activateTab(const QJsonObject& selector, const QString& tabText, int
             return errorObject(QStringLiteral("not_selectable"), QStringLiteral("Tab was not found."));
         }
         tabBar->setCurrentIndex(targetIndex);
-        QTest::qWait(30);
+        QTest::qWait(kPostActionDelayMs);
         return QJsonObject{{"ok", true}, {"index", targetIndex}, {"text", tabBar->tabText(targetIndex)}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
     }
 
@@ -674,7 +692,7 @@ QJsonObject switchStackedPage(const QJsonObject& selector, int index)
     }
 
     stacked->setCurrentIndex(index);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
     return QJsonObject{{"ok", true}, {"index", index}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
 }
 
@@ -699,7 +717,7 @@ QJsonObject expandTreeNode(const QJsonObject& selector, const QJsonArray& path)
     }
 
     tree->expandItem(item);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
     return QJsonObject{{"ok", true}, {"text", item->text(0)}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
 }
 
@@ -724,7 +742,7 @@ QJsonObject collapseTreeNode(const QJsonObject& selector, const QJsonArray& path
     }
 
     tree->collapseItem(item);
-    QTest::qWait(30);
+    QTest::qWait(kPostActionDelayMs);
     return QJsonObject{{"ok", true}, {"text", item->text(0)}, {"widget", WidgetIntrospection::widgetSummary(widget)}};
 }
 

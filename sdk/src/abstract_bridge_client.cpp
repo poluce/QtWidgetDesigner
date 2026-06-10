@@ -17,6 +17,7 @@ AbstractBridgeClient::AbstractBridgeClient(QObject* parent)
 
 AbstractBridgeClient::~AbstractBridgeClient()
 {
+    m_destructing = true;
     disconnectFromBridge();
 }
 
@@ -42,11 +43,14 @@ void AbstractBridgeClient::disconnectFromBridge()
 {
     if (m_socket != nullptr) {
         m_socket->close();
-        m_socket->deleteLater();
+        if (m_destructing) {
+            delete m_socket;
+        } else {
+            m_socket->deleteLater();
+        }
         m_socket = nullptr;
     }
     m_pendingResponses.clear();
-    m_connecting = false;
 }
 
 BridgeCallResult AbstractBridgeClient::call(const QString& command, const QJsonObject& params, int timeoutMs)

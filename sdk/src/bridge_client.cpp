@@ -32,8 +32,11 @@ bool BridgeClient::ensureConnected(int timeoutMs)
     m_socket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
 
     // 持久化连接信号（只连接一次）
-    QObject::connect(m_socket, &QWebSocket::textMessageReceived,
-                     this, &AbstractBridgeClient::onTextMessageReceived);
+    // 注：使用 lambda 而非直接 PMF，因为在 Qt 5 中无法从派生类通过 PMF 访问基类 protected 成员
+    QObject::connect(m_socket, &QWebSocket::textMessageReceived, this,
+                     [this](const QString& message) {
+                         AbstractBridgeClient::onTextMessageReceived(message);
+                     });
     QObject::connect(m_socket, &QWebSocket::disconnected,
                      this, &AbstractBridgeClient::disconnected);
 
@@ -76,11 +79,9 @@ bool BridgeClient::ensureConnected(int timeoutMs)
         loop.quit();
     });
 
-    m_connecting = true;
     timer.start(timeoutMs > 0 ? timeoutMs : 5000);
     m_socket->open(m_bridgeUrl);
     loop.exec();
-    m_connecting = false;
 
     if (connectedOk) {
         emit connected();

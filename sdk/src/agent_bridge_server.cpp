@@ -101,14 +101,20 @@ void AgentBridgeServer::initCommandHandlers()
     };
 
     m_commandHandlers[QStringLiteral("list_commands")] = [this](QWebSocket *, const QJsonObject &, const QJsonValue &id) {
-        QJsonArray commands;
-        commands.reserve(m_commandHandlers.size());
+        // Qt 5.14 QJsonArray 不支持 reserve() 和 std::sort
+        // （迭代器解引用为 QJsonValueRef，不可 std::swap）
+        // 改用 QStringList 排序后转换
+        QStringList commandNames;
+        commandNames.reserve(m_commandHandlers.size());
         for (auto it = m_commandHandlers.constBegin(); it != m_commandHandlers.constEnd(); ++it) {
-            commands.append(it.key());
+            commandNames.append(it.key());
         }
-        // 保证确定性顺序（m_commandHandlers 是 QHash，无序）
-        std::sort(commands.begin(), commands.end(),
-                  [](const QJsonValue &a, const QJsonValue &b) { return a.toString() < b.toString(); });
+        commandNames.sort();
+        QJsonArray commands;
+        // reserve() not available in Qt 5.14 QJsonArray
+        for (const QString& name : std::as_const(commandNames)) {
+            commands.append(name);
+        }
         return successResponse(id, QJsonObject{{QStringLiteral("commands"), commands}});
     };
 
